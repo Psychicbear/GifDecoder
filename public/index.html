@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Go WASM + DOM File Upload</title>
+        <script src="wasm_exec.js"></script>
+        <!-- <script src="/assets/ffmpeg/dist/umd/ffmpeg.js"></script>
+        <script src="/assets/util/dist/umd/index.js"></script> -->
+        <!-- <script type="module" src="ffmpeg-loader.js"></script> -->
+    </head>
+<body>
+    <h1 >Upload a File</h1>
+    <input type="file" id="fileInput" />
+    <pre id="output">Waiting for file...</pre>
+
+    <script>
+        // const { fetchFile } = FFmpegUtil;
+        // const { FFmpeg } = FFmpegWASM;
+        // let ffmpeg = null;
+        // const status = document.getElementById('status');
+        // status.addEventListener('onLoad', async () => {
+        //     message.textContent = 'Loading FFmpeg...';
+        //     try {
+        //         await ffmpeg.load();
+        //         message.textContent = 'FFmpeg loaded successfully!';
+        //     } catch (error) {
+        //         console.error('FFmpeg failed to load:', error);
+        //         message.textContent = 'Failed to load FFmpeg. Check console for details.';
+        //     }
+        // });
+        
+
+        // Function that is passed into Go to interact with the file upload. This is designed to avoid file reading in Go directly and instead use JavaScript's FileReader API.
+        window.readFileAsText = function(file, callback) {
+            const reader = new FileReader();
+            reader.onload = function() {
+            callback(reader.result);
+            };
+            reader.readAsText(file);
+        };
+
+        // Initialises the Go environment and runs the WebAssembly module.
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+        go.run(result.instance);
+        });
+    </script>
+</body>
+</html>
