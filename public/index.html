@@ -29,6 +29,7 @@
 
             // Converts the file to an ArrayBuffer for processing in Go
             const arrayBufferPromise = blob.arrayBuffer().then(arrayBuf => {
+                console.time("decode")
                 document.querySelector('#output').textContent = "File loaded, converting...";
                 console.log("File converted to arraybuffer")
                 const array = new Uint8Array(arrayBuf);
@@ -47,8 +48,15 @@
             document.querySelector('.out-image').appendChild(newImageElement);
         }
 
+        function checkTime(){
+            console.timeLog("decode");
+        }
+
         // Uses JSZip to create a zip file from the collected frames
         function createZip(){
+            console.log("Decode complete, creating zip");
+            console.timeLog("decode")
+            console.timeEnd("decode")
             let zip = new JSZip();
             gifFrames.forEach((frame, index) => {
                 zip.file(`frame_${index}.png`, frame);
@@ -61,7 +69,7 @@
                     saveAs(blob, "frames.zip");
                 })
             }
-            
+
         // Attaches the download function to the button and shows it
             document.querySelector('#download').style.display = 'block';
             document.querySelector('#download').addEventListener('click', downloadZip);

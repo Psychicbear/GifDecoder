@@ -1,12 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
-	"honnef.co/go/js/dom/v2"
-	"syscall/js"
 	"image/gif"
 	"image/png"
-	"bytes"
+	"syscall/js"
+
+	"honnef.co/go/js/dom/v2"
 )
 
 func convert(this js.Value, inputs []js.Value) interface{} {
@@ -25,10 +26,13 @@ func convert(this js.Value, inputs []js.Value) interface{} {
 	}
 
 	outputElement := document.GetElementByID("output").(dom.Element)
-	outputElement.SetTextContent(fmt.Sprintf("Decoded GIF with %d frames", len(gifFile.Image)))
+	
 
 	// Loop through each frame in the GIF and convert it to PNG
-	for _, img := range gifFile.Image {
+	for i, img := range gifFile.Image {
+		progress := fmt.Sprintf("(%d/100) Processed %d of %d frames", (i+1/len(gifFile.Image)), i+1, len(gifFile.Image))
+		println(progress)
+		outputElement.SetTextContent(progress)
 		imgBuf := new(bytes.Buffer)
 		err = png.Encode(imgBuf, img)
 		if err != nil {
@@ -37,11 +41,13 @@ func convert(this js.Value, inputs []js.Value) interface{} {
 			println(fmt.Sprintf("Error encoding PNG: %v", err))
 			return nil
 		}
+		js.Global().Call("checkTime") // Call the JavaScript function to log the time
 		dst := js.Global().Get("Uint8Array").New(len(imgBuf.Bytes()))
 		js.CopyBytesToJS(dst, imgBuf.Bytes())
 		js.Global().Call("displayImage", dst) // Call the JavaScript function to display the image on the page
 	}
 	js.Global().Call("createZip")
+	outputElement.SetTextContent(fmt.Sprintf("Decoded GIF with %d frames", len(gifFile.Image)))
 	return nil
 
 }
