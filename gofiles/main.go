@@ -4,45 +4,50 @@ import (
 	"fmt"
 	"honnef.co/go/js/dom/v2"
 	"syscall/js"
+	"image/gif"
+	"image/png"
+	"bytes"
 )
 
-func main() {
-	//Initialise the DOM 
+func convert(this js.Value, inputs []js.Value) interface{} {
+	println("convert function called")
 	window := dom.GetWindow()
 	document := window.Document()
+	imageArr := inputs[0]
+	inBuf := make([]uint8, imageArr.Get("byteLength").Int())
+	js.CopyBytesToGo(inBuf, imageArr)
+	gifFile, err := gif.DecodeAll(bytes.NewReader(inBuf))
+	if err != nil {
+		errorElement := document.GetElementByID("error").(dom.Element)
+		errorElement.SetTextContent(fmt.Sprintf("Error decoding GIF: %v", err))
+		println(fmt.Sprintf("Error decoding GIF: %v", err))
+		return nil
+	}
 
-	// Link i/o elements to code
-	output := document.GetElementByID("output").(dom.Element)
-	input := document.GetElementByID("fileInput").(*dom.HTMLInputElement)
+	outputElement := document.GetElementByID("output").(dom.Element)
+	outputElement.SetTextContent(fmt.Sprintf("Decoded GIF with %d frames", len(gifFile.Image)))
 
-	// Adds an event listener to trigger when a file is uploaded
-	input.AddEventListener("change", false, func(_ dom.Event) {
-		files := input.Underlying().Get("files")
-		if files.Length() == 0 {
-			output.SetTextContent("No file selected")
-			return
-		}
-
-		file := files.Index(0)
-		filename := file.Get("name").String()
-
-		var callback js.Func
-		callback = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-			text := args[0].String()
-			fmt.Println(args)
-			preview := text
-			if len(text) > 100 {
-				preview = text[:100] + "..."
-			}
-
-			output.SetTextContent(fmt.Sprintf("Read file: %s\nPreview:\n%s", filename, preview))
-			callback.Release() // Release the callback to avoid memory leaks
+	// Loop through each frame in the GIF and convert it to PNG
+	for _, img := range gifFile.Image {
+		imgBuf := new(bytes.Buffer)
+		err = png.Encode(imgBuf, img)
+		if err != nil {
+			errorElement := document.GetElementByID("error").(dom.Element)
+			errorElement.SetTextContent(fmt.Sprintf("Error encoding PNG: %v", err))
+			println(fmt.Sprintf("Error encoding PNG: %v", err))
 			return nil
-		})
+		}
+		dst := js.Global().Get("Uint8Array").New(len(imgBuf.Bytes()))
+		js.CopyBytesToJS(dst, imgBuf.Bytes())
+		js.Global().Call("displayImage", dst) // Call the JavaScript function to display the image on the page
+	}
+	js.Global().Call("createZip")
+	return nil
 
-		// Use the callback here, after it's defined
-		js.Global().Call("readFileAsText", file, callback)
-	})
+}
 
-	select {}
+func main() {
+	c := make(chan bool)
+	js.Global().Set("convert", js.FuncOf(convert)) // Allows the Go function to be called from JavaScript
+	<- c
 }

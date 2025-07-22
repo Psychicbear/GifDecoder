@@ -4,40 +4,70 @@
         <meta charset="utf-8">
         <title>Go WASM + DOM File Upload</title>
         <script src="wasm_exec.js"></script>
-        <!-- <script src="/assets/ffmpeg/dist/umd/ffmpeg.js"></script>
-        <script src="/assets/util/dist/umd/index.js"></script> -->
-        <!-- <script type="module" src="ffmpeg-loader.js"></script> -->
+        <script src="/assets/jszip.min.js"></script>
+        <script src="/assets/FileSaver.min.js"></script>
     </head>
 <body>
     <h1 >Upload a File</h1>
     <input type="file" id="fileInput" />
     <pre id="output">Waiting for file...</pre>
+    <span id="error"></span>
+    <button id="download" style="display: none;">Download zip</button>
+    <div class="out-image"></div>
 
     <script>
-        // const { fetchFile } = FFmpegUtil;
-        // const { FFmpeg } = FFmpegWASM;
-        // let ffmpeg = null;
-        // const status = document.getElementById('status');
-        // status.addEventListener('onLoad', async () => {
-        //     message.textContent = 'Loading FFmpeg...';
-        //     try {
-        //         await ffmpeg.load();
-        //         message.textContent = 'FFmpeg loaded successfully!';
-        //     } catch (error) {
-        //         console.error('FFmpeg failed to load:', error);
-        //         message.textContent = 'Failed to load FFmpeg. Check console for details.';
-        //     }
-        // });
-        
+        let gifFrames = [];
+        document.querySelector('#fileInput').addEventListener('change', function(){
+            console.log("File input changed");
+            //Clears previous images output
+            node = document.querySelector('.out-image');
+            while (node.firstChild) {
+                node.removeChild(node.firstChild);
+            }
 
-        // Function that is passed into Go to interact with the file upload. This is designed to avoid file reading in Go directly and instead use JavaScript's FileReader API.
-        window.readFileAsText = function(file, callback) {
-            const reader = new FileReader();
-            reader.onload = function() {
-            callback(reader.result);
-            };
-            reader.readAsText(file);
-        };
+            const blob = new Blob([this.files[0]], { type: this.files[0].type });
+
+            // Converts the file to an ArrayBuffer for processing in Go
+            const arrayBufferPromise = blob.arrayBuffer().then(arrayBuf => {
+                document.querySelector('#output').textContent = "File loaded, converting...";
+                console.log("File converted to arraybuffer")
+                const array = new Uint8Array(arrayBuf);
+                console.log("Uint8Array created from arraybuffer");
+                let convertedData = convert(array);
+                console.log("Conversion complete, displaying image");
+            })
+        })
+
+        //Takes a blob of image data, converts it to a PNG, and displays it
+        function displayImage(imageData) {
+            let blob = new Blob([imageData], { type: 'image/png' });
+            gifFrames.push(blob);
+            let newImageElement = document.createElement('img');
+            newImageElement.src = URL.createObjectURL(blob);
+            document.querySelector('.out-image').appendChild(newImageElement);
+        }
+
+        // Uses JSZip to create a zip file from the collected frames
+        function createZip(){
+            let zip = new JSZip();
+            gifFrames.forEach((frame, index) => {
+                zip.file(`frame_${index}.png`, frame);
+            });
+            gifFrames = []; // Clear frames after zipping
+
+        // Function to download the zip file
+            function downloadZip(){
+                zip.generateAsync({ type: "blob" }).then(function(blob){
+                    saveAs(blob, "frames.zip");
+                })
+            }
+            
+        // Attaches the download function to the button and shows it
+            document.querySelector('#download').style.display = 'block';
+            document.querySelector('#download').addEventListener('click', downloadZip);
+        }
+
+        
 
         // Initialises the Go environment and runs the WebAssembly module.
         const go = new Go();
