@@ -2,6 +2,7 @@
 <html>
     <head>
         <meta charset="utf-8">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
         <title>Go WASM + DOM File Upload</title>
         <script src="wasm_exec.js"></script>
         <script src="/assets/jszip.min.js"></script>
@@ -12,11 +13,20 @@
     <input type="file" id="fileInput" />
     <pre id="output">Waiting for file...</pre>
     <span id="error"></span>
+    <button id="start" style="display: none;">Start Conversion</button>
     <button id="download" style="display: none;">Download zip</button>
     <div class="out-image"></div>
 
     <script>
+        // TODO
+        // Add Pico CSS for styling
+        // Add button for initialising the conversion
+        // Add warning for large files
+        // Potentially add loading bar
+        // Figure out error handling requirements
         let gifFrames = [];
+        let startBtn = document.querySelector('#start');
+        let downloadBtn = document.querySelector('#download');
         document.querySelector('#fileInput').addEventListener('change', function(){
             console.log("File input changed");
             //Clears previous images output
@@ -25,18 +35,48 @@
                 node.removeChild(node.firstChild);
             }
 
-            const blob = new Blob([this.files[0]], { type: this.files[0].type });
+            //Checks if a file is selected
+            if (this.files.length === 0) {
+                displayError("No file selected");
+                return;
+            }
 
-            // Converts the file to an ArrayBuffer for processing in Go
-            const arrayBufferPromise = blob.arrayBuffer().then(arrayBuf => {
-                console.time("decode")
-                document.querySelector('#output').textContent = "File loaded, converting...";
-                console.log("File converted to arraybuffer")
-                const array = new Uint8Array(arrayBuf);
-                console.log("Uint8Array created from arraybuffer");
-                let convertedData = convert(array);
-                console.log("Conversion complete, displaying image");
+            //Verifies the file type is a GIF
+            if (this.files[0].type !== "image/gif") {
+                displayError("Please upload a GIF file");
+                return;
+            }
+
+
+            const blob = new Blob([this.files[0]], { type: this.files[0].type });
+            console.log(this.files[0])
+            const filePreview = document.createElement('img');
+            filePreview.src = URL.createObjectURL(blob);
+            node.appendChild(filePreview);
+
+
+
+            startBtn.addEventListener('click', function() {
+                // Converts the file to an ArrayBuffer for processing in Go
+                const arrayBufferPromise = blob.arrayBuffer().then(arrayBuf => {
+                    console.time("decode")
+                    document.querySelector('#output').textContent = "File loaded, converting...";
+                    console.log("File converted to arraybuffer")
+                    const array = new Uint8Array(arrayBuf);
+                    console.log("Uint8Array created from arraybuffer");
+                    node.removeChild(node.firstChild);
+                    let convertedData = convert(array);
+                    console.log("Conversion complete, displaying image");
+                })
             })
+
+            // Hides the download button and shows the conversion button
+            startBtn.style.display = 'inline-block';
+            startBtn.disabled = false;
+            downloadBtn.style.display = 'none';
+            downloadBtn.disabled = true;
+            
+
         })
 
         //Takes a blob of image data, converts it to a PNG, and displays it
@@ -46,6 +86,11 @@
             let newImageElement = document.createElement('img');
             newImageElement.src = URL.createObjectURL(blob);
             document.querySelector('.out-image').appendChild(newImageElement);
+        }
+
+        function displayError(errorMessage) {
+            document.querySelector('#error').textContent = errorMessage;
+            console.log("Error: " + errorMessage);
         }
 
         function checkTime(){
@@ -70,9 +115,12 @@
                 })
             }
 
-        // Attaches the download function to the button and shows it
-            document.querySelector('#download').style.display = 'block';
-            document.querySelector('#download').addEventListener('click', downloadZip);
+            // Attaches the download function to the button and shows it
+            downloadBtn.addEventListener('click', downloadZip);
+            startBtn.style.display = 'none';
+            startBtn.disabled = true;
+            downloadBtn.style.display = 'inline-block';
+            downloadBtn.disabled = false;
         }
 
         
