@@ -9,127 +9,172 @@
         <script src="/assets/FileSaver.min.js"></script>
     </head>
 <body>
-    <h1 >Upload a File</h1>
-    <input type="file" id="fileInput" />
-    <pre id="output">Waiting for file...</pre>
-    <span id="error"></span>
-    <button id="start" style="display: none;">Start Conversion</button>
-    <button id="download" style="display: none;">Download zip</button>
-    <div class="out-image"></div>
-
-    <script>
-        // TODO
-        // Add Pico CSS for styling
-        // Add button for initialising the conversion
-        // Add warning for large files
-        // Potentially add loading bar
-        // Figure out error handling requirements
-        let gifFrames = [];
-        let startBtn = document.querySelector('#start');
-        let downloadBtn = document.querySelector('#download');
-        document.querySelector('#fileInput').addEventListener('change', function(){
-            console.log("File input changed");
-            //Clears previous images output
-            node = document.querySelector('.out-image');
-            while (node.firstChild) {
-                node.removeChild(node.firstChild);
-            }
-
-            //Checks if a file is selected
-            if (this.files.length === 0) {
-                displayError("No file selected");
-                return;
-            }
-
-            //Verifies the file type is a GIF
-            if (this.files[0].type !== "image/gif") {
-                displayError("Please upload a GIF file");
-                return;
-            }
+    <div class="container">
+        <h1 >Upload a File</h1>
+        <span id="error"></span>
+        <div class="file-input">
+            <input type="file" id="fileInput" accept="image/gif" />
+            <pre id="output">Waiting for file...</pre>
+        </div>
+        <div class="convert" style="display: none;">
+            
+            <select id="disposeType">
+                <option value="None">None</option>
+                <option value="Background">Background</option>
+                <option value="Previous">Previous</option> 
+            </select>
+            <button id="start">Start Conversion</button>
+        </div>
+        <div class="progress" style="display: none;">
+            <span id="loading" aria-busy="true">Splitting frames...</span>
+            <progress id="progress" value="0" max="100"></progress>
+        </div>
+        <div class="output-frames" style="display: none;">
+            <p id="framecount"></p>
+            <button id="download">Download zip</button>
+            <button id="newconvert">Convert Again</button>
+            <div class="out-image"></div>
+        </div>
 
 
-            const blob = new Blob([this.files[0]], { type: this.files[0].type });
-            console.log(this.files[0])
-            const filePreview = document.createElement('img');
-            filePreview.src = URL.createObjectURL(blob);
-            node.appendChild(filePreview);
+    
+        <script>
+            // TODO
+            // Add warning for large files
+            // Potentially add loading bar
+            // Figure out error handling requirements
+            let gifFrames = [];
+            let startBtn = document.querySelector('#start');
+            let downloadBtn = document.querySelector('#download');
+            let progBar = document.querySelector('#progress');
+            let loadingText = document.querySelector('#loading');
+            let disposeType = document.querySelector('#disposeType');
 
+            document.querySelector('#newconvert').addEventListener('click', function() {
+                document.querySelector('#fileInput').value = ''; // Reset file input
+                document.querySelector('.out-image').innerHTML = '';//Clears previous images output
+                gifFrames = []; // Clear previous frames
+                showScene('.file-input');
+            });
 
+            document.querySelector('#fileInput').addEventListener('change', function(){
+                console.log("File input changed");
+    
+                //Checks if a file is selected
+                if (this.files.length === 0) {
+                    displayError("No file selected");
+                    return;
+                }
+    
+                //Verifies the file type is a GIF
+                if (this.files[0].type !== "image/gif") {
+                    displayError("Please upload a GIF file");
+                    return;
+                }
+    
+    
+                const blob = new Blob([this.files[0]], { type: this.files[0].type });
+                console.log(this.files[0])
+                const filePreview = document.createElement('img');
+                filePreview.src = URL.createObjectURL(blob);
+                filePreview.id = 'preview';
 
-            startBtn.addEventListener('click', function() {
-                // Converts the file to an ArrayBuffer for processing in Go
-                const arrayBufferPromise = blob.arrayBuffer().then(arrayBuf => {
-                    console.time("decode")
-                    document.querySelector('#output').textContent = "File loaded, converting...";
-                    console.log("File converted to arraybuffer")
-                    const array = new Uint8Array(arrayBuf);
-                    console.log("Uint8Array created from arraybuffer");
-                    node.removeChild(node.firstChild);
-                    let convertedData = convert(array);
-                    console.log("Conversion complete, displaying image");
+                node = document.querySelector('.convert');
+                if (node.querySelector('#preview')) {
+                    node.removeChild(node.querySelector('#preview'));
+                }
+                node.insertBefore(filePreview, node.firstChild);
+
+    
+    
+    
+                startBtn.addEventListener('click', function() {
+                    // Converts the file to an ArrayBuffer for processing in Go
+                    const arrayBufferPromise = blob.arrayBuffer().then(arrayBuf => {
+                        console.time("decode")
+                        const array = new Uint8Array(arrayBuf);
+                        showScene('.progress');
+                        console.log("Starting conversion with dispose type: " + disposeType.value);
+                        setProgress(0, 100);
+                        let convertedData = convert(array, disposeType.value);
+                        console.log("Conversion complete, displaying image");
+                    })
                 })
+    
+                showScene('.convert');
+                
+    
             })
+    
+            //Takes a blob of image data, converts it to a PNG, and displays it
+            function displayImage(imageData) {
+                let blob = new Blob([imageData], { type: 'image/png' });
+                gifFrames.push(blob);
+                let newImageElement = document.createElement('img');
+                newImageElement.src = URL.createObjectURL(blob);
+                document.querySelector('.out-image').appendChild(newImageElement);
+            }
+    
+            function displayError(errorMessage) {
+                document.querySelector('#error').textContent = errorMessage;
+                console.log("Error: " + errorMessage);
+            }
+    
+            function checkTime(){
+                console.timeLog("decode");
+            }
 
-            // Hides the download button and shows the conversion button
-            startBtn.style.display = 'inline-block';
-            startBtn.disabled = false;
-            downloadBtn.style.display = 'none';
-            downloadBtn.disabled = true;
+            function setProgress(cur, max) {
+                if (progBar) {
+                    progBar.value = cur;
+                    progBar.max = max;
+                }
+            }
+
+            function showScene(scene) {
+                [".file-input",
+                 ".convert",
+                 ".progress",
+                 ".output-frames"].forEach(selector => {
+                    if (scene === selector) {
+                        document.querySelector(selector).style.display = 'inline-block';
+                    } else {
+                        document.querySelector(selector).style.display = 'none';
+                    }
+                });
+            }
             
 
-        })
-
-        //Takes a blob of image data, converts it to a PNG, and displays it
-        function displayImage(imageData) {
-            let blob = new Blob([imageData], { type: 'image/png' });
-            gifFrames.push(blob);
-            let newImageElement = document.createElement('img');
-            newImageElement.src = URL.createObjectURL(blob);
-            document.querySelector('.out-image').appendChild(newImageElement);
-        }
-
-        function displayError(errorMessage) {
-            document.querySelector('#error').textContent = errorMessage;
-            console.log("Error: " + errorMessage);
-        }
-
-        function checkTime(){
-            console.timeLog("decode");
-        }
-
-        // Uses JSZip to create a zip file from the collected frames
-        function createZip(){
-            console.log("Decode complete, creating zip");
-            console.timeLog("decode")
-            console.timeEnd("decode")
-            let zip = new JSZip();
-            gifFrames.forEach((frame, index) => {
-                zip.file(`frame_${index}.png`, frame);
-            });
-            gifFrames = []; // Clear frames after zipping
-
-        // Function to download the zip file
-            function downloadZip(){
-                zip.generateAsync({ type: "blob" }).then(function(blob){
-                    saveAs(blob, "frames.zip");
-                })
+            // Uses JSZip to create a zip file from the collected frames
+            function createZip(){
+                console.log("Decode complete, creating zip");
+                console.timeLog("decode")
+                console.timeEnd("decode")
+                let zip = new JSZip();
+                gifFrames.forEach((frame, index) => {
+                    zip.file(`frame_${index}.png`, frame);
+                });
+                gifFrames = []; // Clear frames after zipping
+    
+            // Function to download the zip file
+                function downloadZip(){
+                    zip.generateAsync({ type: "blob" }).then(function(blob){
+                        saveAs(blob, "frames.zip");
+                    })
+                }
+    
+                showScene('.output-frames');
+                downloadBtn.addEventListener('click', downloadZip);
             }
-
-            // Attaches the download function to the button and shows it
-            downloadBtn.addEventListener('click', downloadZip);
-            startBtn.style.display = 'none';
-            startBtn.disabled = true;
-            downloadBtn.style.display = 'inline-block';
-            downloadBtn.disabled = false;
-        }
-
-        
-
-        // Initialises the Go environment and runs the WebAssembly module.
-        const go = new Go();
-        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
-        go.run(result.instance);
-        });
-    </script>
+    
+            
+    
+            // Initialises the Go environment and runs the WebAssembly module.
+            const go = new Go();
+            WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+            go.run(result.instance);
+            });
+        </script>
+    </div>
 </body>
 </html>

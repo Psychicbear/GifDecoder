@@ -1,0 +1,2 @@
+## To build wasm file
+In the gofiles folder, run the command `GOOS=js GOARCH=wasm go build -o ../public/main.wasm main.go`
