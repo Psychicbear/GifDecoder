@@ -29,7 +29,7 @@ func convert(this js.Value, inputs []js.Value) interface{} {
 	outputElement := document.GetElementByID("framecount").(dom.Element)
 
 	// EXPERIMENTAL: Create overpaint image for blending frames
-	bounds := gifFile.Image[0].Bounds()
+	bounds := image.Rect(0, 0, gifFile.Config.Width, gifFile.Config.Height)
 	canvas := image.NewRGBA(bounds)
 	backup := image.NewRGBA(bounds)
 
@@ -56,7 +56,7 @@ func convert(this js.Value, inputs []js.Value) interface{} {
         }
 
         // Draw the current frame onto the canvas
-        draw.Draw(canvas, bounds, img, img.Bounds().Min, draw.Over)
+        draw.Draw(canvas, bounds, img, image.Point{}, draw.Over)
 
 		// Allocate buffer for the PNG image
 		imgBuf := new(bytes.Buffer)
@@ -73,7 +73,6 @@ func convert(this js.Value, inputs []js.Value) interface{} {
 		dst := js.Global().Get("Uint8Array").New(len(imgBuf.Bytes()))
 		js.CopyBytesToJS(dst, imgBuf.Bytes())
 		gifFrames.Call("push", dst) // Push the PNG image to the gifFrames array
-		js.Global().Call("setProgress", i+1, len(gifFile.Image)) // Update the progress bar
 	}
 	outputElement.SetTextContent(fmt.Sprintf("Decoded GIF with %d frames", len(gifFile.Image)))
 	return gifFrames

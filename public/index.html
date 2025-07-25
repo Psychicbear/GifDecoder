@@ -3,18 +3,33 @@
     <head>
         <meta charset="utf-8">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-        <title>Go WASM + DOM File Upload</title>
+        <title>Gif Splitter</title>
         <script src="wasm_exec.js"></script>
         <script src="/assets/jszip.min.js"></script>
         <script src="/assets/FileSaver.min.js"></script>
     </head>
 <body>
     <div class="container">
-        <h1 >Upload a File</h1>
+        <h1 >GIF Splitter</h1>
         <span id="error"></span>
         <div class="file-input">
             <input type="file" id="fileInput" accept="image/gif" />
             <pre id="output">Waiting for file...</pre>
+            <dialog>
+                <article>
+                    <h2>Large File Upload</h2>
+                    <p>
+                        You are about to upload a large file. This may take a while to process.
+                        Please do not close the browser if the page freezes, as the processing is still ongoing.
+                    </p>
+                    <footer id="dialog-footer">
+                    <button class="secondary">
+                        Cancel
+                    </button>
+                    <button>Confirm</button>
+                    </footer>
+                </article>
+                </dialog>
         </div>
         <div class="convert" style="display: none;">
 <!--             
@@ -23,7 +38,10 @@
                 <option value="background">Preserve background</option>
                 <option value="previous">Preserve previous frame data</option> 
             </select> -->
-            <button id="start">Start Conversion</button>
+            <div>
+                <button id="start">Start Conversion</button>
+                <button class="newconvert">Choose different gif</button>
+            </div>
         </div>
         <div class="progress" style="display: none;">
             <span id="loading" aria-busy="true">Splitting frames...</span>
@@ -32,7 +50,7 @@
         <div class="output-frames" style="display: none;">
             <p id="framecount"></p>
             <button id="download">Download zip</button>
-            <button id="newconvert">Convert Again</button>
+            <button class="newconvert">Convert Again</button>
             <div class="out-image"></div>
         </div>
 
@@ -44,18 +62,29 @@
             // Add popup for large file sizes
             // Attempt go routines for faster processing
             let zip
-            let gifFrames = [];
             let startBtn = document.querySelector('#start');
             let downloadBtn = document.querySelector('#download');
             let progBar = document.querySelector('#progress');
             let loadingText = document.querySelector('#loading');
             let disposeType = document.querySelector('#disposeType');
 
-            document.querySelector('#newconvert').addEventListener('click', function() {
-                document.querySelector('#fileInput').value = ''; // Reset file input
-                document.querySelector('.out-image').innerHTML = '';//Clears previous images output
-                gifFrames = []; // Clear previous frames
-                showScene('.file-input');
+            document.querySelectorAll('.newconvert').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelector('#fileInput').value = ''; // Reset file input
+                    document.querySelector('.out-image').innerHTML = '';//Clears previous images output
+                    showScene('.file-input');
+                });
+            });
+
+            let dialog = document.querySelector('#dialog-footer');;
+            let dialogButtons = dialog.querySelectorAll('button');
+            dialogButtons[0].addEventListener('click', function() {
+                document.querySelector('dialog').close();
+            });
+
+            dialogButtons[1].addEventListener('click', function() {
+                document.querySelector('dialog').close();
+                showScene('.convert');
             });
 
             document.querySelector('#fileInput').addEventListener('change', function(){
@@ -73,7 +102,10 @@
                     return;
                 }
     
-    
+                // Check file size (10 MB = 10 * 1024 * 1024 bytes)
+                if (this.files[0].size > 10 * 1024 * 1024) {
+                    document.querySelector('dialog').showModal();
+                }
                 const blob = new Blob([this.files[0]], { type: this.files[0].type });
                 console.log(this.files)
                 const filePreview = document.createElement('img');
@@ -86,9 +118,6 @@
                 }
                 node.insertBefore(filePreview, node.firstChild);
 
-    
-    
-    
                 startBtn.onclick = async function() {
                     let outputFramesDOM = document.querySelector('.out-image')
                     outputFramesDOM.innerHTML = ''; // Clear previous images
@@ -98,8 +127,8 @@
                     // Converts the file to an ArrayBuffer for processing in Go
                     const arrayBuf = await blob.arrayBuffer()
                     const array = new Uint8Array(arrayBuf);
-                    console.log("Starting conversion with dispose type: " + disposeType.value);
-                    let frames = await convert(array, disposeType.value);
+                    console.log("Starting conversion");
+                    let frames = await convert(array);
                     console.log("Conversion complete, displaying image");
 
                     
@@ -120,11 +149,15 @@
                         })
                     }
         
+
                     showScene('.output-frames');
                     downloadBtn.onclick = downloadZip;
                 }
     
-                showScene('.convert');
+                if(!document.querySelector('dialog').open) {
+                    showScene('.convert');
+                }
+                
                 
     
             })
