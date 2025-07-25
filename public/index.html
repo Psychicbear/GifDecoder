@@ -40,7 +40,7 @@
             </select> -->
             <div>
                 <button id="start">Start Conversion</button>
-                <button class="newconvert">Choose different gif</button>
+                <button class="newconvert">Choose different GIF</button>
             </div>
         </div>
         <div class="progress" style="display: none;">
@@ -59,7 +59,6 @@
         <script>
             // TODO
             // Fix the progress bar not updating
-            // Add popup for large file sizes
             // Attempt go routines for faster processing
             let zip
             let startBtn = document.querySelector('#start');
@@ -78,10 +77,13 @@
 
             let dialog = document.querySelector('#dialog-footer');;
             let dialogButtons = dialog.querySelectorAll('button');
+
+            // Cancel button to close the dialog
             dialogButtons[0].addEventListener('click', function() {
                 document.querySelector('dialog').close();
             });
 
+            // Confirm button to close the dialog and show the convert scene
             dialogButtons[1].addEventListener('click', function() {
                 document.querySelector('dialog').close();
                 showScene('.convert');
@@ -106,12 +108,15 @@
                 if (this.files[0].size > 10 * 1024 * 1024) {
                     document.querySelector('dialog').showModal();
                 }
+
+                // Converts file to a Blob for preview and processing
                 const blob = new Blob([this.files[0]], { type: this.files[0].type });
                 console.log(this.files)
                 const filePreview = document.createElement('img');
                 filePreview.src = URL.createObjectURL(blob);
                 filePreview.id = 'preview';
 
+                // Display the preview image
                 node = document.querySelector('.convert');
                 if (node.querySelector('#preview')) {
                     node.removeChild(node.querySelector('#preview'));
@@ -124,6 +129,7 @@
                     console.time("decode")
                     setProgress(0, 100);
                     showScene('.progress');
+
                     // Converts the file to an ArrayBuffer for processing in Go
                     const arrayBuf = await blob.arrayBuffer()
                     const array = new Uint8Array(arrayBuf);
@@ -131,7 +137,7 @@
                     let frames = await convert(array);
                     console.log("Conversion complete, displaying image");
 
-                    
+                    // Updates the output frames with the converted frames, and zips them together
                     zip = new JSZip();
                     frames.forEach((frame, i) => {
                         let blob = new Blob([frame], { type: 'image/png' });
@@ -157,9 +163,6 @@
                 if(!document.querySelector('dialog').open) {
                     showScene('.convert');
                 }
-                
-                
-    
             })
     
     
