@@ -1,6 +1,6 @@
 // Initialises the Go environment and runs the WebAssembly module.
 const go = new Go();
-WebAssembly.instantiateStreaming(fetch("/assets/main.wasm"), go.importObject).then((result) => {
+WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
 go.run(result.instance);
 });
 
