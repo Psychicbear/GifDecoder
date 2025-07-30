@@ -1,13 +1,9 @@
-// Initialises the Go environment and runs the WebAssembly module.
-const go = new Go();
-WebAssembly.instantiateStreaming(fetch("/assets/main.wasm"), go.importObject).then((result) => {
-go.run(result.instance);
-});
-
+const worker = new Worker('/assets/gif-worker.js');
 class GifSplitter extends HTMLElement {
     #outputFrames = []
     constructor() {
         super();
+        this.worker = worker;
     }
 
     connectedCallback() {
@@ -32,7 +28,7 @@ class GifSplitter extends HTMLElement {
             </div>
         </div>
         <div class="progress" style="display: none;">
-            <span id="loading" aria-busy="true">Splitting frames...</span>
+            <span id="loading" aria-busy="true"></span>
             <progress id="progress" value="0" max="100"></progress>
         </div>
         <div class="output-frames" style="display: none;">
@@ -85,6 +81,16 @@ class GifSplitter extends HTMLElement {
      * * It also manages dialog interactions for large file uploads and incorrect file types.
      */
     #addEvents() {;
+        this.worker.onmessage = (e) => {
+            if (e.data.type === 'progress') {
+                this.setProgress(e.data.cur, e.data.max);
+            } else if (e.data.type === 'done') {
+                this.processResult(e.data.frames);
+            } else if (e.data.type === 'error') {
+                this.displayError(e.data.message);
+            }
+        };
+
         this.fileInput.addEventListener('change', this.fileUpload);
         this.querySelector('#start').addEventListener('click', this.startConversion);
 
@@ -160,23 +166,51 @@ class GifSplitter extends HTMLElement {
             this.#outputFrames = [];
             const arrayBuf = await this.blob.arrayBuffer();
             const array = new Uint8Array(arrayBuf);
-            let frames = await convert(array);
+            this.setProgress(0, 100);
+            document.querySelector('#loading').textContent = 'Initializing conversion...';
+            this.worker.postMessage({ array });
+    }
 
-            this.zip = new JSZip();
-            frames.forEach((frame, i) => {
-                let frameBlob = new Blob([frame], { type: 'image/png' });
-                let newImageElement = document.createElement('img');
-                newImageElement.src = URL.createObjectURL(frameBlob);
-                this.#outputFrames.push(newImageElement);
-                this.zip.file(`frame_${i}.png`, frameBlob);
-            });
+    /**
+     * 
+     * @param {Uint16Array[]} frames 
+     */
+    processResult(frames) {
+        this.zip = new JSZip();
+        frames.forEach((frame, i) => {
+            let frameBlob = new Blob([frame], { type: 'image/png' });
+            let newImageElement = document.createElement('img');
+            newImageElement.src = URL.createObjectURL(frameBlob);
+            this.#outputFrames.push(newImageElement);
+            this.zip.file(`frame_${i}.png`, frameBlob);
+        });
 
-            this.displayOutputFrames();
-            this.querySelector('#framecount').textContent = `Decoded GIF with ${frames.length} frames`;
-            this.showScene('.output-frames');
-            this.querySelector('#download').onclick = () => {
-                this.zip.generateAsync({ type: "blob" }).then(blob => saveAs(blob, "frames.zip"));
-            };
+        this.displayOutputFrames();
+        this.querySelector('#framecount').textContent = `Decoded GIF with ${frames.length} frames`;
+        this.showScene('.output-frames');
+        this.querySelector('#download').onclick = () => {
+            this.zip.generateAsync({ type: "blob" }).then(blob => saveAs(blob, "frames.zip"));
+        };
+    }
+
+    setProgress(cur, max) {
+        const progressBar = document.querySelector('#progress');
+        progressBar.value = cur;
+        progressBar.max = max;
+
+        const loadingText = document.querySelector('#loading');
+        loadingText.textContent = `${cur}/${max} frames processed...`;
+    }
+
+    /**
+     * 
+     * @param {string} message 
+     */
+    displayError(message) {
+        this.errorDiv.textContent = message;
+        this.showScene('.file-input');
+        this.fileInput.value = ''; // Reset file input
+        this.blob = null; // Reset the blob
     }
 
     /**
