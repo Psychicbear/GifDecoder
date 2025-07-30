@@ -8,25 +8,26 @@ import (
 	"image/gif"
 	"image/png"
 	"syscall/js"
-	"honnef.co/go/js/dom/v2"
+	"time"
 )
 
 func convert(this js.Value, inputs []js.Value) interface{} {
+	start := time.Now()
 	gifFrames := js.Global().Get("Array").New() // Create a new JavaScript array to hold the frames
-	window := dom.GetWindow()
-	document := window.Document()
 	imageArr := inputs[0]
+	progressCb := inputs[1]
+
 	inBuf := make([]uint8, imageArr.Get("byteLength").Int())
 	js.CopyBytesToGo(inBuf, imageArr)
+
 	gifFile, err := gif.DecodeAll(bytes.NewReader(inBuf))
 	if err != nil {
-		errorElement := document.GetElementByID("error").(dom.Element)
-		errorElement.SetTextContent(fmt.Sprintf("Error decoding GIF: %v", err))
-		println(fmt.Sprintf("Error decoding GIF: %v", err))
+		js.Global().Call("postMessage", map[string]interface{}{
+			"type":    "error",
+			"message": fmt.Sprintf("Error decoding GIF: %v", err),
+		})
 		return nil
 	}
-
-	outputElement := document.GetElementByID("framecount").(dom.Element)
 
 	// EXPERIMENTAL: Create overpaint image for blending frames
 	bounds := image.Rect(0, 0, gifFile.Config.Width, gifFile.Config.Height)
@@ -35,10 +36,9 @@ func convert(this js.Value, inputs []js.Value) interface{} {
 
 	// Loop through each frame in the GIF and convert it to PNG
 	for i, img := range gifFile.Image {
-		// Dom manipulation to show progress
-		progress := fmt.Sprintf("(%d/100) Processed %d of %d frames", (i+1/len(gifFile.Image)), i+1, len(gifFile.Image))
-		println(progress)
-        // Handle disposal method for previous frame (except first frame)
+		progressCb.Call("invoke", js.ValueOf(i+1), js.ValueOf(len(gifFile.Image))) // Call the progress callback with current frame index and total frames
+        
+		// Handle disposal method for previous frame (except first frame)
         if i > 0 {
             switch gifFile.Disposal[i-1] {
             case gif.DisposalBackground:
@@ -60,21 +60,24 @@ func convert(this js.Value, inputs []js.Value) interface{} {
 
 		// Allocate buffer for the PNG image
 		imgBuf := new(bytes.Buffer)
+
 		// Encode the image to PNG format
 		err = png.Encode(imgBuf, canvas)
 		if err != nil {
-			errorElement := document.GetElementByID("error").(dom.Element)
-			errorElement.SetTextContent(fmt.Sprintf("Error encoding PNG: %v", err))
-			println(fmt.Sprintf("Error encoding PNG: %v", err))
+			js.Global().Call("postMessage", map[string]interface{}{
+				"type":    "error",
+				"message": fmt.Sprintf("Error encoding PNG: %v", err),
+			})
 			return nil
 		}
 
-
+		// Convert the PNG image to a JavaScript Uint8Array for use in JavaScript
 		dst := js.Global().Get("Uint8Array").New(len(imgBuf.Bytes()))
 		js.CopyBytesToJS(dst, imgBuf.Bytes())
 		gifFrames.Call("push", dst) // Push the PNG image to the gifFrames array
 	}
-	outputElement.SetTextContent(fmt.Sprintf("Decoded GIF with %d frames", len(gifFile.Image)))
+	elapsed := time.Since(start)
+    fmt.Println("Conversion took: ", elapsed)
 	return gifFrames
 
 }
