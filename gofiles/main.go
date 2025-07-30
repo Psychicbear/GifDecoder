@@ -82,6 +82,26 @@ func convert(this js.Value, inputs []js.Value) interface{} {
 
 }
 
+func sheetSplitter(this js.Value, inputs []js.Value) interface{} {
+	sprites := js.Global().Get("Array").New() // Create a new JavaScript array to hold the sprite frames
+	spritesheetIn := inputs[0]
+	params := inputs[1]
+	
+	inBuf := make([]uint8, spritesheetIn.Get("byteLength").Int())
+	js.CopyBytesToGo(inBuf, spritesheetIn)
+
+	sheet, err := png.Decode(bytes.NewReader(inBuf))
+	if err != nil {
+		js.Global().Call("postMessage", map[string]interface{}{
+			"type":    "error",
+			"message": fmt.Sprintf("Error decoding GIF: %v", err),
+		})
+		return nil
+	}
+
+	return sprites
+}
+
 func main() {
 	c := make(chan bool)
 	js.Global().Set("convert", js.FuncOf(convert)) // Allows the Go function to be called from JavaScript
