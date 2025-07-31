@@ -1,4 +1,4 @@
-const worker = new Worker('/assets/gif-worker.js');
+const worker = new Worker('/assets/sprite-worker.js');
 class GifSplitter extends HTMLElement {
     #outputFrames = []
     constructor() {
@@ -168,7 +168,7 @@ class GifSplitter extends HTMLElement {
             const array = new Uint8Array(arrayBuf);
             this.setProgress(0, 100);
             document.querySelector('#loading').textContent = 'Initializing conversion...';
-            this.worker.postMessage({ array });
+            this.worker.postMessage({ type: 'convert', data: array });
     }
 
     /**

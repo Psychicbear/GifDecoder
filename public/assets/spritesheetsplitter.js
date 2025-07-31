@@ -1,5 +1,6 @@
-const worker = new Worker('/assets/spritesheet-worker.js');
+const worker = new Worker('/assets/sprite-worker.js');
 class SpritesheetSlicer extends HTMLElement {
+    #outputFrames = [];
     constructor() {
         super();
         this.worker = worker;
@@ -17,6 +18,8 @@ class SpritesheetSlicer extends HTMLElement {
         <div class="file-input">
             <input type="file" id="fileInput" accept="image/png" />
             <pre id="output">Waiting for file...</pre>
+            ${this.#fireErrorDialog}
+            ${this.#largeFileDialog}
         </div>
         <div class="convert" style="display: none;">
             <div>
@@ -40,15 +43,63 @@ class SpritesheetSlicer extends HTMLElement {
 
     #form = `
         <form id="spritesheetForm">
-            <label for="x">X:</label>
-            <input type="number" name="x" value="0">
-            <label for="y">Y:</label>
-            <input type="number" name="y" value="0">
-            <label for="width">Width:</label>
-            <input type="number" name="width" value="32">
-            <label for="height">Height:</label>
-            <input type="number" name="height" value="32">
+            <fieldset class="grid">
+                <label for="x">X:
+                    <input type="number" name="x" value="0">
+                </label>
+                <label for="y">Y:
+                    <input type="number" name="y" value="0">
+                </label>
+            </fieldset>
+            <fieldset class="grid">
+                <label for="width">Width:
+                    <input type="number" name="width" value="100">
+                </label>
+                <label for="height">Height:
+                    <input type="number" name="height" value="100">
+                </label>
+            </fieldset>
+            <fieldset class="grid">
+                <label for="pHorizontal">Horizontal:
+                    <input type="number" name="pHorizontal" value="0">
+                </label>
+                <label for="pVertical">Vertical:
+                    <input type="number" name="pVertical" value="0">
+                </label>
+            </fieldset>
         </form>
+    `
+
+    #fireErrorDialog = `
+            <dialog id="fileErrorDialog">
+                <article>
+                    <h2>Incorrect File Type</h2>
+                    <p>
+                        The file you selected is not a PNG. Please upload a valid PNG file.
+                    </p>
+                    <footer id="dialog-footer">
+                        <button class="close-dialog">Ok</button>
+                    </footer>
+                </article>
+            </dialog>
+    `
+
+    #largeFileDialog = `
+        <dialog id="largeFileDialog">
+            <article>
+                <h2>Large File Upload</h2>
+                <p>
+                    You are about to upload a large file. This may take a while to process.
+                    Please do not close the browser if the page freezes, as the processing is still ongoing.
+                </p>
+                <footer id="dialog-footer">
+                <button class="secondary close-dialog">
+                    Cancel
+                </button>
+                <button id="confirm">Confirm</button>
+                </footer>
+            </article>
+        </dialog>
     `
 
     /**
@@ -71,6 +122,7 @@ class SpritesheetSlicer extends HTMLElement {
         };
 
         this.fileInput.addEventListener('change', this.fileUpload);
+        this.querySelector('#start').addEventListener('click', this.startConversion);
 
         
         this.querySelectorAll('.newconvert').forEach(btn => {
@@ -103,16 +155,16 @@ class SpritesheetSlicer extends HTMLElement {
             this.largeFileDialog.showModal();
         }
 
-        // this.blob = new Blob([files[0]], { type: files[0].type });
-        // const filePreview = document.createElement('img');
-        // filePreview.src = URL.createObjectURL(this.blob);
-        // filePreview.id = 'preview';
+        this.blob = new Blob([files[0]], { type: files[0].type });
+        const filePreview = document.createElement('img');
+        filePreview.src = URL.createObjectURL(this.blob);
+        filePreview.id = 'preview';
 
-        // let convertDiv = this.querySelector('.convert');
-        // if (convertDiv.querySelector('#preview')) {
-        //     convertDiv.removeChild(convertDiv.querySelector('#preview'));
-        // }
-        // convertDiv.insertBefore(filePreview, convertDiv.firstChild);
+        let convertDiv = this.querySelector('.convert');
+        if (convertDiv.querySelector('#preview')) {
+            convertDiv.removeChild(convertDiv.querySelector('#preview'));
+        }
+        convertDiv.insertBefore(filePreview, convertDiv.firstChild);
 
         if (!this.fileErrorDialog.open && !this.largeFileDialog.open) {
             this.showScene('.convert');
@@ -130,9 +182,66 @@ class SpritesheetSlicer extends HTMLElement {
             this.showScene('.progress');
             const arrayBuf = await this.blob.arrayBuffer();
             const array = new Uint8Array(arrayBuf);
+            console.log("array: ", array)
             this.setProgress(0, 100);
             document.querySelector('#loading').textContent = 'Initializing conversion...';
-            this.worker.postMessage({ img: array, params: this.splitParams });
+            this.worker.postMessage({ type: 'sheet-splitter', data: array, params: this.splitParams });
+    }
+
+    /**
+     * 
+     * @param {Uint16Array[]} frames 
+     */
+    processResult(frames) {
+        this.zip = new JSZip();
+        frames.forEach((frame, i) => {
+            let frameBlob = new Blob([frame], { type: 'image/png' });
+            let newImageElement = document.createElement('img');
+            newImageElement.src = URL.createObjectURL(frameBlob);
+            this.#outputFrames.push(newImageElement);
+            this.zip.file(`frame_${i}.png`, frameBlob);
+        });
+
+        this.displayOutputFrames();
+        this.querySelector('#framecount').textContent = `Decoded GIF with ${frames.length} frames`;
+        this.showScene('.output-frames');
+        this.querySelector('#download').onclick = () => {
+            this.zip.generateAsync({ type: "blob" }).then(blob => saveAs(blob, "frames.zip"));
+        };
+    }
+
+    /**
+     * Displays the output frames in the outputFrames container.
+     * If there are more than 10 frames, it uses a details element to show the first 10 frames
+     * and hides the rest under a summary.
+     * If there are 10 or fewer frames, it displays all frames directly.
+     */
+    displayOutputFrames() {
+        if (this.#outputFrames.length > 10) {
+            this.outputFrames.innerHTML = `
+            <details>
+                <summary></summary>
+            </details>
+            `;
+
+            const details = this.outputFrames.querySelector('details');
+            const summary = details.querySelector('summary');
+
+            this.#outputFrames.slice(0, 10).forEach((frame) => {
+                frame.style.width = '10%';
+                summary.appendChild(frame);
+            })
+            this.#outputFrames.slice(10).forEach((frame) => {
+                frame.style.width = '10%';
+                details.appendChild(frame);
+            })
+            summary.appendChild(document.createTextNode(`+${this.#outputFrames.length - 10} more frames`));
+        } else {
+            this.#outputFrames.forEach((frame) => {
+                this.outputFrames.appendChild(frame);
+            });
+        }
+
     }
 
     setProgress(cur, max) {
@@ -192,6 +301,18 @@ class SpritesheetSlicer extends HTMLElement {
         return this.querySelector('#fileInput');
     }
 
+    get fileErrorDialog() {
+        return this.querySelector('#fileErrorDialog');
+    }
+
+    get largeFileDialog() {
+        return this.querySelector('#largeFileDialog');
+    }
+
+    get outputFrames() {
+        return this.querySelector('.out-image');
+    }
+
     /**
      * Exposes the form input element.
      * This is used to control the slicing parameters of the spritesheet.
@@ -212,13 +333,21 @@ class SpritesheetSlicer extends HTMLElement {
     get height() {
         return this.querySelector('#spritesheetForm input[name="height"]').value;
     }
+    get pHorizontal() {
+        return this.querySelector('#spritesheetForm input[name="pHorizontal"]').value;
+    }
+    get pVertical() {
+        return this.querySelector('#spritesheetForm input[name="pVertical"]').value;
+    }
 
     get splitParams() {
         return {
-            x: this.x,
-            y: this.y,
-            width: this.width,
-            height: this.height
+            x: parseInt(this.x),
+            y: parseInt(this.y),
+            width: parseInt(this.width),
+            height: parseInt(this.height),
+            pHorizontal: parseInt(this.pHorizontal),
+            pVertical: parseInt(this.pVertical)
         };
     }
 

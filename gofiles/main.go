@@ -34,6 +34,8 @@ func convert(this js.Value, inputs []js.Value) interface{} {
 	canvas := image.NewRGBA(bounds)
 	backup := image.NewRGBA(bounds)
 
+	imgBuf := new(bytes.Buffer)
+
 	// Loop through each frame in the GIF and convert it to PNG
 	for i, img := range gifFile.Image {
 		progressCb.Call("invoke", js.ValueOf(i+1), js.ValueOf(len(gifFile.Image))) // Call the progress callback with current frame index and total frames
@@ -59,7 +61,7 @@ func convert(this js.Value, inputs []js.Value) interface{} {
         draw.Draw(canvas, bounds, img, image.Point{}, draw.Over)
 
 		// Allocate buffer for the PNG image
-		imgBuf := new(bytes.Buffer)
+		imgBuf.Reset()
 
 		// Encode the image to PNG format
 		err = png.Encode(imgBuf, canvas)
@@ -83,10 +85,18 @@ func convert(this js.Value, inputs []js.Value) interface{} {
 }
 
 func sheetSplitter(this js.Value, inputs []js.Value) interface{} {
+	start := time.Now()
 	sprites := js.Global().Get("Array").New() // Create a new JavaScript array to hold the sprite frames
 	spritesheetIn := inputs[0]
 	params := inputs[1]
+	progressCb := inputs[2]
+
 	
+	width := params.Get("width").Int()
+	height := params.Get("height").Int()
+	pVertical := params.Get("pVertical").Int()
+	pHorizontal := params.Get("pHorizontal").Int()
+
 	inBuf := make([]uint8, spritesheetIn.Get("byteLength").Int())
 	js.CopyBytesToGo(inBuf, spritesheetIn)
 
@@ -98,12 +108,60 @@ func sheetSplitter(this js.Value, inputs []js.Value) interface{} {
 		})
 		return nil
 	}
+	imgBuf := new(bytes.Buffer)
 
+	sheetBounds := sheet.Bounds()
+	//Create a navigable canvas with the spritesheet
+	sheetCanvas := image.NewRGBA(sheetBounds)
+	draw.Draw(sheetCanvas, sheetCanvas.Bounds(), sheet, image.Point{}, draw.Src)
+	
+	//Create a canvas for individual frame selection
+	frameBounds := image.Rect(0,0,width, height)
+	frame := image.NewRGBA(frameBounds)
+	var frameRange image.Rectangle
+	
+	maxFrames := ((sheetBounds.Dx() - (pHorizontal*2)) / width) * ((sheetBounds.Dy() - (pVertical*2)) / height)
+	frameCount := 0
+	println(fmt.Sprintf("Slicing an expected %v frames"), maxFrames)
+
+	//Loop through the sheet canvas grid, 
+	for y:= params.Get("y").Int() + pVertical; y+height <= sheet.Bounds().Max.Y; y+=(height+pVertical){
+		for x := params.Get("x").Int() + pHorizontal; x+width <= sheet.Bounds().Max.X; x+=(width+pHorizontal){
+			progressCb.Call("invoke", js.ValueOf(frameCount), js.ValueOf(maxFrames))
+			frameRange = image.Rect(x,y,x+width,y+height) // Gets current sprite co-ordinates
+			println(fmt.Sprintf("Current frame position: %v, %v"), frameRange.Bounds().Min.X,frameRange.Bounds().Min.Y)
+			draw.Draw(frame, frameBounds, sheetCanvas.SubImage(frameRange), image.Point{}, draw.Over)//Draws the current sprite to frame using a subimage of the spritesheet
+
+			imgBuf.Reset()
+			
+			png.Encode(imgBuf, frame)
+			if err != nil {
+				js.Global().Call("postMessage", map[string]interface{}{
+					"type":    "error",
+					"message": fmt.Sprintf("Error decoding GIF: %v", err),
+				})
+				return nil
+			}
+
+			//Converts image data to a js value and pushes it to the js sprite array
+			dst := js.Global().Get("Uint8Array").New(len(imgBuf.Bytes()))
+			js.CopyBytesToJS(dst, imgBuf.Bytes())
+			sprites.Call("push", dst)
+			frameCount++
+
+			// Clear the frame 
+			draw.Draw(frame, frameBounds, image.Transparent, image.Point{}, draw.Src)
+		}
+	}
+
+	elapsed := time.Since(start)
+    fmt.Println("Conversion took: ", elapsed)
 	return sprites
 }
 
 func main() {
 	c := make(chan bool)
 	js.Global().Set("convert", js.FuncOf(convert)) // Allows the Go function to be called from JavaScript
+	js.Global().Set("sheetSplitter", js.FuncOf(sheetSplitter)) // Allows the Go function to be called from JavaScript
 	<- c
 }
