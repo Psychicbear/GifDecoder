@@ -110,31 +110,24 @@ func sheetSplitter(this js.Value, inputs []js.Value) interface{} {
 	}
 	imgBuf := new(bytes.Buffer)
 
-	sheetBounds := sheet.Bounds()
 	//Create a navigable canvas with the spritesheet
+	sheetBounds := sheet.Bounds()
 	sheetCanvas := image.NewRGBA(sheetBounds)
 	draw.Draw(sheetCanvas, sheetCanvas.Bounds(), sheet, image.Point{}, draw.Src)
 	
-	//Create a canvas for individual frame selection
-	frameBounds := image.Rect(0,0,width, height)
-	frame := image.NewRGBA(frameBounds)
 	var frameRange image.Rectangle
-	
 	maxFrames := ((sheetBounds.Dx() - (pHorizontal*2)) / width) * ((sheetBounds.Dy() - (pVertical*2)) / height)
 	frameCount := 0
-	println(fmt.Sprintf("Slicing an expected %v frames"), maxFrames)
+	println(fmt.Sprintf("Slicing an expected"), maxFrames, fmt.Sprintf("frames"))
 
 	//Loop through the sheet canvas grid, 
 	for y:= params.Get("y").Int() + pVertical; y+height <= sheet.Bounds().Max.Y; y+=(height+pVertical){
 		for x := params.Get("x").Int() + pHorizontal; x+width <= sheet.Bounds().Max.X; x+=(width+pHorizontal){
 			progressCb.Call("invoke", js.ValueOf(frameCount), js.ValueOf(maxFrames))
 			frameRange = image.Rect(x,y,x+width,y+height) // Gets current sprite co-ordinates
-			println(fmt.Sprintf("Current frame position: %v, %v"), frameRange.Bounds().Min.X,frameRange.Bounds().Min.Y)
-			draw.Draw(frame, frameBounds, sheetCanvas.SubImage(frameRange), image.Point{}, draw.Over)//Draws the current sprite to frame using a subimage of the spritesheet
 
 			imgBuf.Reset()
-			
-			png.Encode(imgBuf, frame)
+			png.Encode(imgBuf, sheetCanvas.SubImage(frameRange))
 			if err != nil {
 				js.Global().Call("postMessage", map[string]interface{}{
 					"type":    "error",
@@ -148,9 +141,6 @@ func sheetSplitter(this js.Value, inputs []js.Value) interface{} {
 			js.CopyBytesToJS(dst, imgBuf.Bytes())
 			sprites.Call("push", dst)
 			frameCount++
-
-			// Clear the frame 
-			draw.Draw(frame, frameBounds, image.Transparent, image.Point{}, draw.Src)
 		}
 	}
 
