@@ -3,15 +3,24 @@
     <head>
         <meta charset="utf-8">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Spritesheet splitter</title>
         <script src="/assets/wasm_exec.js"></script>
         <script src="/assets/jszip.min.js"></script>
         <script src="/assets/FileSaver.min.js"></script>
-        <script src="/assets/spritesheetsplitter.js"></script>
+        <!-- <script src="/assets/gifsplitter.js"></script> -->
+        <script src="/assets/spritesheetsplitter.js" type="module" defer></script>
     </head>
 <body>
     <div class="container">
         <spritesheet-slicer></spritesheet-slicer>
+        <!-- <gif-splitter></gif-splitter> -->
+        <!-- <aside id="debug" class="invisible">
+            <button id="showhidebtn">🔍</button>
+            <section>
+
+            </section>
+        </aside> -->
     </div>
 </body>
 </html>

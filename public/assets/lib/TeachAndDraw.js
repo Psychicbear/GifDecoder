@@ -1,0 +1,737 @@
+import { Shape } from "./Shape.js";
+import { Colour } from "./Colour.js";
+import { Text } from "./Text.js";
+import { ClipBoard } from "./Clipboard.js";
+import { Maffs } from "./maffs.js";
+import { Mouse } from "./Mouse.js";
+import { Touch } from "./Touch.js";
+import { Keyboard } from "./Keyboard.js";
+import { Debug } from "./Debug.js";
+import { Gui } from "./Gui.js";
+import { Sound } from "./Sound.js";
+
+import { Video } from "./Video.js";
+
+import { PerformanceMetrics } from "./PerformanceMetrics.js";
+import { TimeManager } from "./TimeManager.js";
+
+import { Make } from "./Make.js";
+import { Load } from "./Load.js";
+
+
+//data structures
+import { Entity } from "./Entity.js";
+import { Group, makeGroup } from "./Group.js";
+import { MovingStamp } from "./Animation.js";
+
+//game stuff
+import { Collider } from "./Collider.js";
+import { CollisionManager } from "./CollisionManager.js";
+
+//errors
+import { ErrorMsgManager } from "./ErrorMessageManager.js";
+
+import { DrawStateManager } from "./DrawStateManager.js";
+
+import { storage } from "./Storage.js";
+import { Camera } from "./Camera.js";
+
+/**
+ * @class Tad
+ */
+export class Tad {
+    /**
+     * @type {boolean}
+     */
+    static debug = false;
+
+    #collisionManager;
+    /** @type {{update:(function|null)}} */
+    #userFuncs = { update: null };
+    #isTabActive;
+    #muteButton;
+    #paused;
+    /** @type {number[]} */
+    #frameTimes;
+
+    camera = new Camera(this);
+
+    constructor(
+        //launch static checker eventually.
+        draw = () => {
+            console.warn("no user made function for draw given!");
+        }
+    ) {
+        /**
+         * @type {HTMLCanvasElement | undefined}
+         */
+        this.canvas = /** @type {HTMLCanvasElement | null} */ (
+            document.getElementById("myCanvas")
+        );
+        // @ts-ignore
+        if(!this.canvas) {
+            this.canvas = document.createElement('canvas')
+        }
+        this.context = this.canvas.getContext("2d");
+        this.width = 800;
+        this.height = 600;
+        this.storage = storage;
+
+        this.dialog = /** @type {HTMLDialogElement} */ (
+            document.querySelector("#tad_dialog")
+        );
+        if (!this.dialog) {
+            const nuDialog = document.createElement("dialog");
+            nuDialog.id = "tad_dialog";
+            console.warn("dialog missing! creating dialog!");
+            const body = document.querySelector("body");
+            if (body) {
+                body.appendChild(nuDialog);
+            }
+            this.dialog = nuDialog;
+        }
+
+        this.debug_aside = document.querySelector("#debug");
+        if (!this.debug_aside) {
+            const nuDebugAside = document.createElement("aside");
+            nuDebugAside.id = "debug";
+            console.warn("debug panel missing! creating debug panel!");
+            const body = document.querySelector("body");
+            if (body) {
+                body.appendChild(nuDebugAside);
+            }
+            this.debug_aside = nuDebugAside;
+        }
+        this.make = new Make(this);
+        this.load = new Load(this);
+        //instruction set
+        this.math = new Maffs(this);
+        /** @hidden */
+        this.colour = new Colour(this);
+        this.shape = new Shape(this);
+        this.text = new Text(this);
+        this.clipboard = new ClipBoard();
+        this.mouse = new Mouse(this);
+        this.touch = new Touch(this);
+        this.keys = new Keyboard(this);
+        // this.camera = new Camera(this);
+
+        this.gui = new Gui(this);
+        this.sound = new Sound(this);
+
+        //internal state managers
+        this.state = new DrawStateManager(this);
+
+        //physics
+        this.#collisionManager = new CollisionManager(this);
+
+        this.performanceMetrics = new PerformanceMetrics(this);
+
+        this.time = new TimeManager();
+        //fps controls
+        this.averageFps = 0; // Stores the average frames per second.
+
+        this.#frameTimes = []; // Stores the timestamps of the last N frames.
+        this.lastFrameTimestamp = window.performance.now();
+
+        this.#muteButton = this.make.button(0, 0, 100, 100, "");
+        this.#paused = false;
+
+        //collections
+        this.#userFuncs = {
+            update: draw,
+        };
+
+        this.#isTabActive = true;
+
+        //tunnelling code
+        this.fractionOfMovement = 0.1;
+    }
+
+    /**
+     * private_internal
+     */
+    drawCanvas() {
+        if (!this.#isTabActive || this.#paused) {
+            if (!this.dialog.querySelector("#unpause")) {
+                const btn = document.createElement("button");
+                btn.innerText = "Unpause";
+                btn.id = "unpause";
+                btn.addEventListener("click", () => {
+                    this.dialog.close();
+                    this.#paused = false;
+                });
+                this.dialog.innerHTML = "";
+                this.dialog.appendChild(btn);
+            }
+            // if (!this.dialog.open) {
+            //     this.dialog.showModal();
+            // }
+            window.requestAnimationFrame(() => {
+                this.drawCanvas();
+            });
+            return; // Stop the draw cycle if the tab is not active
+        }
+
+        if (!document.hidden) {
+            // per frame code
+            //update camera cehnter
+            if (this.debug) {
+                //frameRate tracking and calculation
+                const frameTimeDif = this.time.msThen - this.lastFrameTimestamp;
+                this.lastFrameTimestamp = this.time.msThen;
+                this.#frameTimes.push(frameTimeDif);
+
+                const twoSeconds = this.time.fps * 2;
+                if (this.#frameTimes.length > twoSeconds) { // Keep last 2 seconds of frame times
+                    this.#frameTimes.shift();
+                }
+
+                const averageFrameTime = this.#calculateAverage(
+                    this.#frameTimes
+                );
+                this.averageFps = 1000 / averageFrameTime;
+
+                this.performanceMetrics.update();
+            }
+
+            this.clearCanvas();
+            // @ts-expect-error
+            if (this.load._jobsDone === false) {
+                // @ts-expect-error
+                this.load.drawLoadingScreen();
+            } else {
+                this.upkeep();
+
+                try {
+                    this.#userFuncs.update();
+
+                    //@ts-expect-error
+                    if (this.load.soundsLoaded > 0) {
+                        this.sound.draw();
+                    }
+                } catch (error) {
+                    this.#handleError(error);
+                }
+
+                this.downkeep();
+            }
+        }
+
+        window.requestAnimationFrame(() => {
+            this.drawCanvas();
+        });
+    }
+
+    /**
+     * Called before the user function every frame. Responsible for resetting the {@link DrawStateManager} as well updating the {@link TimeManager} and every entities update method.
+     *
+     */
+    upkeep() {
+        this.time.update();
+        this.state.reset();
+
+        // Update all entities
+        for (const entity of Entity.all) {
+            if (entity.exists) {
+                entity.update();
+            }
+        }
+    }
+
+    /**
+     * Runs after the user function every frame.
+     */
+    downkeep() {
+        // Delete removed entities
+        for (let i = 0; i < Entity.all.length; i++) {
+            if (Entity.all[i].exists === false) {
+                delete Entity.all[i];
+                Entity.all.splice(i, 1);
+                i -= 1;
+            }
+        }
+
+        if (Collider.all != undefined) {
+            for (let i = 0; i < Collider.all.length; i++) {
+                Collider.all[i].overlays = new Set();
+                Collider.all[i].collisions = new Set();
+            }
+        }
+
+        if (this.debug) {
+            Debug.constructInfoPane(this);
+            Debug.drawTad(this);
+        }
+
+        this.keys.draw();
+        this.mouse.draw();
+        this.touch.draw();
+
+        for (const entity of Entity.all) {
+            if (entity.exists) {
+                entity.move();
+                entity.moveX();
+            }
+        }
+        this.#collisionManager.handleCollisions();
+
+        for (const entity of Entity.all) {
+            if (entity.exists) {
+                entity.moveY();
+            }
+        }
+        this.#collisionManager.handleCollisions();
+        if (Collider.all !== undefined && Collider.all !== null) {
+            for (const collider of Collider.all) {
+                if (collider.exists) {
+                    if (collider.collisions.size > 0) {
+                        let bounce = collider.bounciness / 100;
+                        collider.velocity.x = collider.velocity.x * bounce;
+                        collider.velocity.y = collider.velocity.y * bounce;
+                    }
+                }
+            }
+        }
+
+        this.#collisionManager.finishCollisions();
+
+        this.camera.draw();
+        Group.cleanup();
+    }
+
+    /**
+     * private_internal
+     */
+    get stroke() {
+        throw new Error("You probably wanted $.colour.stroke not $.stroke :)");
+    }
+
+    /**
+     * private_internal
+     */
+    get fill() {
+        throw new Error("You probably wanted $.colour.fill not $.fill :)");
+    }
+
+    /**
+     * @deprecated
+     * @private
+     */
+    makeGroup() {
+        throw new Error("makeGroup is deprecated! use make.group instead :)");
+    }
+
+    set paused(value) {
+        if (typeof value === "boolean") {
+            this.#paused = value;
+            return;
+        }
+        throw new Error(
+            `Paused expects a boolean you gave ${value}:${typeof value}`
+        );
+    }
+    get paused() {
+        return this.#paused;
+    }
+    /**
+     * @param {boolean} value
+     */
+    set debug(value) {
+        // confirm its a boolean
+        let prevVal = Tad.debug;
+        // @ts-ignore
+        Tad.debug = value;
+        if (Tad.debug && prevVal === false) {
+            //went from false to true!
+            Debug.applyDebugGrid(this);
+        }
+        if (Tad.debug === false && prevVal) {
+            //went from true to false
+            Debug.removeDebugGrid(this);
+        }
+    }
+    get debug() {
+        // @ts-ignore
+        return Tad.debug;
+    }
+    /**
+     * @param {number} value
+     */
+    set w(value) {
+        this.width = value;
+    }
+    get w() {
+        return this.width;
+    }
+    /**
+     * @param {number} value
+     */
+    set h(value) {
+        this.height = value;
+    }
+    get h() {
+        return this.height;
+    }
+
+    /**
+     * @param {number} value
+     */
+    set width(value) {
+        // @ts-ignore
+        this.canvas.width = value;
+        this.camera.x = value / 2;
+    }
+    get width() {
+        return this.canvas.width;
+    }
+    /**  @param {number} value */
+    set height(value) {
+        this.canvas.height = value;
+        this.camera.y = value / 2;
+    }
+    get height() {
+        return this.canvas.height;
+    }
+
+    get frameCount() {
+        return this.time.frameCount;
+    }
+
+    set fps(value) {
+        if (Number.isFinite(value) === false) {
+            throw new Error(
+                ErrorMsgManager.numberCheckFailed(
+                    value,
+                    "fps has to be a number!"
+                )
+            );
+        }
+        if (value < 1) {
+            throw new Error("fps has to be set 1 or more");
+        }
+        this.time.fps = value;
+    }
+
+    get fps() {
+        return this.time.fps;
+    }
+
+    /**
+     * Loads an animation consisting of multiple images from given file paths.
+     * This method creates a new Animation object, loads each image specified in the filepaths,
+     * and returns the assembled animation.
+     * @param {number} x - The x-coordinate where the animation will be positioned.
+     * @param {number} y - The y-coordinate where the animation will be positioned.
+     * @param {...string} filepaths - File paths of images to be loaded for the animation.
+     * @returns {MovingStamp} The newly created Animation object.
+     * @throws {Error} If x or y are not finite numbers.
+     * @throws {Error} If any of the filepaths are not strings or if no filepaths are provided.
+     */
+    loadAnimation(x, y, ...filepaths) {
+        throw new Error("loadAnimation is deprecated! use load.animation instead :)");
+    }
+
+    /**
+     * @deprecated
+     * @private
+     */
+    loadImage() {
+        throw new Error("loadImage is deprecated! use load.image instead :)");
+    }
+
+    /**
+     * @private
+     * @deprecated
+     */
+    loadTextFile() {
+        throw new Error("loadTextFile is deprecated! use load.text instead :)")
+    }
+
+    /**
+     * @private
+     * @deprecated
+     */
+    loadCustomFont() {
+        new Error("loadCustomFont is deprecated! use load.font instead :)");
+    }
+
+    /**
+     * @deprecated
+     * @private
+     */
+    loadJsonFile(){
+        throw new Error("loadJsonFile is deprecated! use load.json instead :)");
+    }
+
+    /**
+     * @private
+     * @deprecated
+     */
+    loadSound() {
+        new Error("loadSound is deprecated! use load.sound instead :)");
+    }
+
+    /**
+     * Sets up a listener for the document's visibility change event to pause the game when the tab is not active
+     */
+
+    /**
+     * private_internal
+     */
+    setupTabSwitchListener() {
+        document.addEventListener("visibilitychange", () => {
+            this.#isTabActive = !document.hidden;
+            if (this.#isTabActive) {
+                this.drawCanvas();
+            } else {
+                this.keys.clearKeys();
+            }
+        });
+    }
+
+    /**
+     * private_internal
+     */
+    //set up the entity all group done here due to hoisting issues
+    setupCanvas() {
+        if (!Entity.all) {
+            Entity.all = this.make.group(this);
+            Entity.all.name = "Entity.all";
+        }
+
+        this.setupTabSwitchListener();
+
+        window.requestAnimationFrame(() => {
+            this.drawCanvas();
+        });
+    }
+
+    /** @private */
+    clearCanvas() {
+        // @ts-ignore
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    /**
+     * private_internal
+     */
+    drawEntities() {
+        for (let entity of Entity.all) {
+            entity.draw();
+        }
+    }
+
+    /**
+     * private_internal
+     */
+    drawColliders() {
+        if (Collider.all) {
+            for (let i = 0; i < Collider.all.length; i++) {
+                Collider.all[i].draw();
+            }
+        }
+    }
+    /**
+     *
+     * @param {Array<Number>} array
+     * private_internal
+     * @returns
+     */
+    #calculateAverage(array) {
+        let sum = 0;
+        if (array.length === 0) {
+            //prevent NaN
+            return 0;
+        }
+        for (let i = 0; i < array.length; i++) {
+            sum += array[i];
+        }
+        return sum / array.length;
+    }
+
+    /**
+     * This method eventually will supplement commonly found error types with educational videos from {@link Video} about what an error could mean.
+     * It should ideally check if the error message already mentions a video so we don't double up and supply too many videos.
+     * @param {Error} error
+     */
+    #handleError(error) {
+        if (error instanceof EvalError) {
+            console.error(
+                `Caught EvalError\nName: "${error.name}"\nMessage: "${error.message}"`
+            );
+        } else if (error instanceof RangeError) {
+            console.error(
+                `Caught RangeError\nName: "${error.name}"\nMessage: "${error.message}"`
+            );
+        } else if (error instanceof ReferenceError) {
+            console.error(
+                `Caught ReferenceError\nName: "${error.name}"\nMessage: "${error.message}"`
+            );
+        } else if (error instanceof SyntaxError) {
+            console.error(
+                `Caught SyntaxError\nName: "${error.name}"\nMessage: "${error.message}"`
+            );
+        } else if (error instanceof TypeError) {
+            console.error(
+                `Caught TypeError\nName: "${error.name}"\nMessage: "${error.message}"`
+            );
+        } else if (error instanceof URIError) {
+            console.error(
+                `Caught URIError\nName: "${error.name}"\nMessage: "${error.message}"`
+            );
+        } else if (error instanceof AggregateError) {
+            console.error(
+                `Caught AggregateError\nName: "${error.name}"\nMessage: "${error.message}"`
+            );
+        } else if (error instanceof TypeError) {
+            console.error(
+                `Caught TypeError\nName: "${error.name}"\nMessage: "${error.message}"`
+            );
+        } else {
+            // throw new Error(error);
+        }
+        throw error;
+    }
+
+    /**
+     * @private
+     * @deprecated
+     */
+    makeEntity() {
+        throw new Error("makeEntity has been deprecated! Use make.entity instead!");
+    }
+
+    /**
+     * @private
+     * @deprecated - use make.button instead!
+     */
+    makeButton() {
+        throw new Error(
+            "makeButton has been deprecated! Use make.button instead!"
+        );
+    }
+    /**
+     * @private
+     * @deprecated - use make.checkbox instead!
+     */
+    makeCheckbox() {
+        throw new Error(
+            "makeCheckbox has been deprecated! Use make.checkbox instead!"
+        );
+    }
+    /**
+     * @deprecated
+     * @private
+     */
+    makeSlider() {
+        throw new Error("this is deprecated! use make.slider instead :)");
+    }
+
+    /**
+     * @deprecated
+     * @private
+     */
+    makeDropdown() {
+        throw new Error("this is deprecated! use make.dropdown instead :)");
+    }
+
+    /**
+     * @deprecated
+     * @private
+     */
+    makeTextArea() {
+        throw new Error("this is deprecated! use make.textArea instead :)");
+    }
+
+    /**
+     * @deprecated
+     * @private
+     */
+    makePoint() {
+        throw new Error("this is deprecated! use make.point instead :)");
+    }
+    /**
+     * @private
+     * @deprecated
+     */
+    makeBoxCollider() {
+        throw new Error("This is deprecated! use make.boxCollider instead :)");
+    }
+    /**
+     * @deprecated
+     * @private
+     */
+    makeCircleCollider() {
+        throw new Error(
+            "This is deprecated! use make.circleCollider instead :)"
+        );
+    }
+    /**
+     *
+     * @param {Function} updateFunction
+     * @param {any} canvas
+     */
+    use(updateFunction, canvas = document.getElementById("myCanvas")) {
+        this.#userFuncs.update = updateFunction;
+        this.setupCanvas();
+
+        //later change it so this is the only place canvas is acquired
+        this.canvas = canvas;
+        
+        if (!this.canvas) {
+            throw new Error("no canvas found with id of myCanvas in the html!");
+        }
+        /**
+         * @type {CanvasRenderingContext2D} context
+         */
+        // @ts-ignore
+        this.context = this.canvas.getContext("2d");
+    }
+
+    /**
+     * private_internal
+     */
+    getCollisionManager() {
+        return this.#collisionManager;
+    }
+}
+
+export const $ = new Tad();
+
+export const shape = $.shape;
+
+export const mouse = $.mouse;
+
+export const math = $.math;
+
+export const load = $.load;
+
+export const touch = $.touch;
+
+export const keys = $.keys;
+
+export const text = $.text;
+
+export const make = $.make;
+
+// @ts-ignore
+window.$ = $;
+export const tad = $;
+// @ts-ignore
+window.shape = {
+    rectangle: () => {
+        console.error("Sorry, you need to import shape to use this!");
+    },
+    oval: () => {
+        console.error("Sorry, you need to import shape to use this!");
+    },
+    line: () => {
+        console.error("Sorry, you need to import shape to use this!");
+    },
+    multiline: () => {
+        console.error("Sorry, you need to import shape to use this!");
+    },
+};
+// @ts-ignore
+window.text = text;

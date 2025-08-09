@@ -1,17 +1,158 @@
+let canvas = document.createElement("canvas");
+canvas.id = "myCanvas";
+document.body.appendChild(canvas)
+
+const style = document.createElement('style');
+style.textContent = `
+  .convert {
+    flex-direction: row;
+    width: 100%;  
+  }
+
+  #convertForm {
+    flex: 1 1;
+  }
+
+  #myCanvas {
+    flex: 3 0;
+  }
+`;
+document.head.appendChild(style);
+
+import { $ } from "./lib/TeachAndDraw.js";
+import { AssetJob } from './lib/AssetManager.js';
+import { Img, Stamp } from './lib/Img.js';
+import { Collider } from './lib/Collider.js';
+
+// /**
+//  * Lockpick skill: 100
+//  * Curse you James
+//  */
+// Array.prototype.forEach = Array.prototype._forEach
+
+
+/**
+ * @typedef {import("./lib/TeachAndDraw.js).Tad} Tad
+ * @typedef {import("./lib/AssetManager.js).AssetJob} AssetJob
+ * @typedef {import("./lib/Img.js).Img} Img
+ * @typedef {import("./lib/Img.js).Stamp} Stamp
+ * @typedef {import("./lib/Group.js).Group} Group
+*/
+
+
+
+/** @type {Tad} */
+$.use(update, document.querySelector('#myCanvas'))
+/** @type {Stamp | null} */
+$.spriteSheetImage = null
+$.spriteSheetSquares = $.make.group()
+$.sParams = {
+    x: 0, y: 0, w: 0, h: 0, ph: 0, pv: 0
+}
+$.setup = false
+$.cScale = 100
+$.setImageScale = false
+$.retroImageLoad = function (blobUrl){
+    console.log('Creating new image in tad: ', blobUrl)
+    const job = new AssetJob(blobUrl)
+    const img = new Img(blobUrl, job);
+    const nuStamp = new Stamp(this, 0, 0, img);
+    img.wrapper.push(nuStamp);
+    // @ts-ignore
+    job.asset = img;
+    console.log({w: img.width, h: img.h})
+    this.spriteSheetImage = nuStamp
+    this.setImageScale = false
+}
+
+function highlightSprites(img, sX, sY, sW, sH, sPadLeft, sPadTop){
+    if(sW <= 0 | sH <= 0){
+        return
+    }
+    //console.log({w: img.w, h: img.h})
+    let sheet = img
+    let sheetX = sheet.x - sheet.w/2
+    let sheetY = sheet.y - sheet.h/2
+    let x = sheetX + sX + sW/2
+    let y = sheetY + sY + sH/2
+    $.shape.colour = 'transparent'
+    $.shape.border = 'yellow'
+    for(y;y<= sheetY + sheet.h + sPadTop; y += sH + sPadTop){
+        for(x;x<= sheetX + sheet.w + sPadLeft; x+= sW + sPadLeft){
+            $.shape.rectangle(x, y, sW, sH)
+        }
+        y+= sPadTop
+        x = sheetX + sX + sW/2
+    }
+}
+
+function scaleToFit(imgW, imgH, canvasW, canvasH){
+    const scaleX = canvasW / imgW
+    const scaleY = canvasH / imgH
+    return Math.min(scaleX, scaleY)
+}
+
+function setup(){
+
+}
+
+
+function update(){
+    if(!$.setup){
+        setup()
+    }
+    let stamp = $.spriteSheetImage
+    if($.spriteSheetImage){
+        stamp.draw()
+        stamp.x = $.w/2
+        stamp.y = $.h/2
+        console.log(stamp.raw.complete)
+        if(stamp.raw.complete){
+            if(!$.setImageScale){
+                canvas = document.querySelector("#myCanvas")
+                $.w = canvas.clientWidth
+                $.h = canvas.clientHeight
+                $.cScale = scaleToFit(stamp.w, stamp.h, $.w, $.h) * 100
+                
+                // stamp.w = stamp.w * $.cScale
+                // stamp.h = stamp.h * $.cScale
+                console.log(stamp)
+                $.setImageScale = true
+            }
+            $.shape.colour = 'transparent'
+            $.shape.border = 'red'
+            $.shape.rectangle(stamp.x, stamp.y, stamp.w,stamp.h)
+            highlightSprites(stamp, $.sParams.x, $.sParams.y, $.sParams.w, $.sParams.h, $.sParams.ph, $.sParams.pv)
+        }
+    }
+
+}
+
+
 const worker = new Worker('/assets/sprite-worker.js');
+
 class SpritesheetSlicer extends HTMLElement {
     #outputFrames = [];
     constructor() {
         super();
         this.worker = worker;
+        this.$ = $
     }
 
     connectedCallback() {
         this.render()
         this.#addEvents();
+
+        console.log(this.$.spriteSheetImage)
+        this.$.retroImageLoad('/assets/guy.png')
+        this.$.sParams = {
+            x: 0, y: 0, w: 100, h: 100, ph: 0, pv: 0
+        }
+        this.showScene('.convert')
     }
 
     render() {
+        let canvas = document.querySelector('#myCanvas')
         this.innerHTML = `
         <h1>Spritesheet Slicer</h1>
         <span id="error"></span>
@@ -22,7 +163,7 @@ class SpritesheetSlicer extends HTMLElement {
             ${this.#largeFileDialog}
         </div>
         <div class="convert" style="display: none;">
-            <div>
+            <div id="convertForm"">
                 ${this.#form}
                 <button id="start">Start Conversion</button>
                 <button class="newconvert">Choose different sheet</button>
@@ -39,6 +180,9 @@ class SpritesheetSlicer extends HTMLElement {
             <div class="out-image"></div>
         </div>
         `;
+
+        this.querySelector(".convert").appendChild(canvas)
+        // this.$.debug = true
     }
 
     #form = `
@@ -53,18 +197,18 @@ class SpritesheetSlicer extends HTMLElement {
             </fieldset>
             <fieldset class="grid">
                 <label for="width">Width:
-                    <input type="number" name="width" value="100">
+                    <input type="number" name="w" value="100">
                 </label>
                 <label for="height">Height:
-                    <input type="number" name="height" value="100">
+                    <input type="number" name="h" value="100">
                 </label>
             </fieldset>
             <fieldset class="grid">
                 <label for="pHorizontal">Horizontal:
-                    <input type="number" name="pHorizontal" value="0">
+                    <input type="number" name="ph" value="0">
                 </label>
                 <label for="pVertical">Vertical:
-                    <input type="number" name="pVertical" value="0">
+                    <input type="number" name="pv" value="0">
                 </label>
             </fieldset>
         </form>
@@ -102,6 +246,8 @@ class SpritesheetSlicer extends HTMLElement {
         </dialog>
     `
 
+
+
     /**
      * Adds event listeners to the elements in the component.
      * This includes:
@@ -132,6 +278,14 @@ class SpritesheetSlicer extends HTMLElement {
                 this.showScene('.file-input');
             });
         });
+
+        this.querySelectorAll('form input').forEach(inp => {
+            console.log(inp)
+            inp.addEventListener('input', e => {
+                console.log({target: e.target.name, value: e.target.value })
+                this.$.sParams[e.target.name] = parseInt(e.target.value)
+            })
+        })
     }
 
     /**
@@ -156,15 +310,10 @@ class SpritesheetSlicer extends HTMLElement {
         }
 
         this.blob = new Blob([files[0]], { type: files[0].type });
-        const filePreview = document.createElement('img');
-        filePreview.src = URL.createObjectURL(this.blob);
-        filePreview.id = 'preview';
 
-        let convertDiv = this.querySelector('.convert');
-        if (convertDiv.querySelector('#preview')) {
-            convertDiv.removeChild(convertDiv.querySelector('#preview'));
-        }
-        convertDiv.insertBefore(filePreview, convertDiv.firstChild);
+        console.log(this.$.spriteSheetImage)
+        this.$.retroImageLoad(URL.createObjectURL(this.blob))
+        console.log(this.$.spriteSheetImage)
 
         if (!this.fileErrorDialog.open && !this.largeFileDialog.open) {
             this.showScene('.convert');
@@ -203,7 +352,7 @@ class SpritesheetSlicer extends HTMLElement {
         });
 
         this.displayOutputFrames();
-        this.querySelector('#framecount').textContent = `Decoded GIF with ${frames.length} frames`;
+        this.querySelector('#framecount').textContent = `Sliced spritesheet into ${frames.length} frames`;
         this.showScene('.output-frames');
         this.querySelector('#download').onclick = () => {
             this.zip.generateAsync({ type: "blob" }).then(blob => saveAs(blob, "frames.zip"));
@@ -277,7 +426,11 @@ class SpritesheetSlicer extends HTMLElement {
             ".output-frames"
         ].forEach(selector => {
             if (scene === selector) {
-                document.querySelector(selector).style.display = 'inline-block';
+                if(selector == ".convert"){
+                    document.querySelector(".convert").style.display = "flex"
+                } else {
+                    document.querySelector(selector).style.display = 'inline-block';
+                }
             } else {
                 document.querySelector(selector).style.display = 'none';
             }

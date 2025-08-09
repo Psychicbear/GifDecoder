@@ -1,12 +1,5 @@
 importScripts('/assets/wasm_exec.js');
 
-// class goMessage {
-// 	constructor(type, data, params=null){
-// 		this.type = type
-// 		this.data = data
-// 		this.params = params
-// 	}
-// }
 
 const go = new Go();
 
@@ -34,7 +27,7 @@ self.onmessage = async function (e) {
 	});
 
 	try {
-		let result
+		let result = null
 		switch (type) {
 			case 'convert':
 				result = convert(data, progressCallback); break;
