@@ -19,51 +19,7 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-import { $ } from "./lib/TeachAndDraw.js";
-import { AssetJob } from './lib/AssetManager.js';
-import { Img, Stamp } from './lib/Img.js';
-import { Collider } from './lib/Collider.js';
 
-// /**
-//  * Lockpick skill: 100
-//  * Curse you James
-//  */
-// Array.prototype.forEach = Array.prototype._forEach
-
-
-/**
- * @typedef {import("./lib/TeachAndDraw.js).Tad} Tad
- * @typedef {import("./lib/AssetManager.js).AssetJob} AssetJob
- * @typedef {import("./lib/Img.js).Img} Img
- * @typedef {import("./lib/Img.js).Stamp} Stamp
- * @typedef {import("./lib/Group.js).Group} Group
-*/
-
-
-
-/** @type {Tad} */
-$.use(update, document.querySelector('#myCanvas'))
-/** @type {Stamp | null} */
-$.spriteSheetImage = null
-$.spriteSheetSquares = $.make.group()
-$.sParams = {
-    x: 0, y: 0, w: 0, h: 0, ph: 0, pv: 0
-}
-$.setup = false
-$.cScale = 100
-$.setImageScale = false
-$.retroImageLoad = function (blobUrl){
-    console.log('Creating new image in tad: ', blobUrl)
-    const job = new AssetJob(blobUrl)
-    const img = new Img(blobUrl, job);
-    const nuStamp = new Stamp(this, 0, 0, img);
-    img.wrapper.push(nuStamp);
-    // @ts-ignore
-    job.asset = img;
-    console.log({w: img.width, h: img.h})
-    this.spriteSheetImage = nuStamp
-    this.setImageScale = false
-}
 
 function highlightSprites(img, sX, sY, sW, sH, sPadLeft, sPadTop){
     if(sW <= 0 | sH <= 0){
@@ -92,67 +48,31 @@ function scaleToFit(imgW, imgH, canvasW, canvasH){
     return Math.min(scaleX, scaleY)
 }
 
-function setup(){
-
-}
-
-
-function update(){
-    if(!$.setup){
-        setup()
-    }
-    let stamp = $.spriteSheetImage
-    if($.spriteSheetImage){
-        stamp.draw()
-        stamp.x = $.w/2
-        stamp.y = $.h/2
-        console.log(stamp.raw.complete)
-        if(stamp.raw.complete){
-            if(!$.setImageScale){
-                canvas = document.querySelector("#myCanvas")
-                $.w = canvas.clientWidth
-                $.h = canvas.clientHeight
-                $.cScale = scaleToFit(stamp.w, stamp.h, $.w, $.h) * 100
-                
-                // stamp.w = stamp.w * $.cScale
-                // stamp.h = stamp.h * $.cScale
-                console.log(stamp)
-                $.setImageScale = true
-            }
-            $.shape.colour = 'transparent'
-            $.shape.border = 'red'
-            $.shape.rectangle(stamp.x, stamp.y, stamp.w,stamp.h)
-            highlightSprites(stamp, $.sParams.x, $.sParams.y, $.sParams.w, $.sParams.h, $.sParams.ph, $.sParams.pv)
-        }
-    }
-
-}
 
 
 const worker = new Worker('/assets/sprite-worker.js');
 
 class SpritesheetSlicer extends HTMLElement {
     #outputFrames = [];
+    img = new Image()
     constructor() {
         super();
         this.worker = worker;
-        this.$ = $
+        // this.$ = $
     }
 
     connectedCallback() {
         this.render()
         this.#addEvents();
 
-        console.log(this.$.spriteSheetImage)
-        this.$.retroImageLoad('/assets/guy.png')
-        this.$.sParams = {
-            x: 0, y: 0, w: 100, h: 100, ph: 0, pv: 0
-        }
+        this.img.src = '/assets/guy.png'
         this.showScene('.convert')
     }
 
     render() {
-        let canvas = document.querySelector('#myCanvas')
+        console.log('rendering')
+        let canvas = this.canvas
+        console.log(canvas)
         this.innerHTML = `
         <h1>Spritesheet Slicer</h1>
         <span id="error"></span>
@@ -182,7 +102,6 @@ class SpritesheetSlicer extends HTMLElement {
         `;
 
         this.querySelector(".convert").appendChild(canvas)
-        // this.$.debug = true
     }
 
     #form = `
@@ -246,7 +165,48 @@ class SpritesheetSlicer extends HTMLElement {
         </dialog>
     `
 
+    draw() {
+        if(!this.canvas){
+            return
+        }
+        let canv = this.canvas
+        print(canv)
+        canv.width = canv.clientWidth
+        canv.height = canv.clientHeight
+        let img = this.img
+        let scale = scaleToFit(img.width, img.height, canv.width, canv.height)
+        let iWidth = img.width * scale
+        let iHeight = img.height * scale
+        let gridParams = this.splitParams
 
+        // canv.width = iWidth
+        // canv.height = iHeight
+
+        let ctx = canv.getContext("2d")
+        let scaled = {x: gridParams.x *scale, y: gridParams.y * scale, w: gridParams.w * scale, h: gridParams.h * scale, ph: gridParams.ph * scale, pv: gridParams.pv * scale}
+
+
+        ctx.clearRect(0,0, canvas.width, canvas.height)
+        ctx.drawImage(img, 0, 0, iWidth, iHeight)
+
+        // Draw a semi-transparent overlay to dim the image
+        ctx.save();
+        ctx.globalAlpha = 0.6; // Adjust for desired dimness
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, canv.width, canv.height);
+        ctx.restore();
+
+        ctx.save()
+        ctx.strokeStyle = "yellow"
+        for(let y = scaled.y;y<= iHeight; y += scaled.h + scaled.ph){
+            for(let x = scaled.x;x<= iWidth; x+= scaled.w + scaled.pv){
+                ctx.strokeRect(x,y, scaled.w, scaled.h)
+                ctx.drawImage(img, x,y, scaled.w, scaled.h, x, y, scaled.w, scaled.h)
+            }
+        }
+        ctx.restore()
+
+    }
 
     /**
      * Adds event listeners to the elements in the component.
@@ -285,6 +245,11 @@ class SpritesheetSlicer extends HTMLElement {
                 console.log({target: e.target.name, value: e.target.value })
                 this.$.sParams[e.target.name] = parseInt(e.target.value)
             })
+        })
+
+        this.img.addEventListener('load', _ => {
+            console.log('Image loaded')
+            this.draw()
         })
     }
 
@@ -462,6 +427,10 @@ class SpritesheetSlicer extends HTMLElement {
         return this.querySelector('#largeFileDialog');
     }
 
+    get canvas(){
+        return document.querySelector('#myCanvas')
+    }
+
     get outputFrames() {
         return this.querySelector('.out-image');
     }
@@ -481,26 +450,26 @@ class SpritesheetSlicer extends HTMLElement {
         return this.querySelector('#spritesheetForm input[name="y"]').value;
     }
     get width() {
-        return this.querySelector('#spritesheetForm input[name="width"]').value;
+        return this.querySelector('#spritesheetForm input[name="w"]').value;
     }
     get height() {
-        return this.querySelector('#spritesheetForm input[name="height"]').value;
+        return this.querySelector('#spritesheetForm input[name="h"]').value;
     }
     get pHorizontal() {
-        return this.querySelector('#spritesheetForm input[name="pHorizontal"]').value;
+        return this.querySelector('#spritesheetForm input[name="ph"]').value;
     }
     get pVertical() {
-        return this.querySelector('#spritesheetForm input[name="pVertical"]').value;
+        return this.querySelector('#spritesheetForm input[name="pv"]').value;
     }
 
     get splitParams() {
         return {
             x: parseInt(this.x),
             y: parseInt(this.y),
-            width: parseInt(this.width),
-            height: parseInt(this.height),
-            pHorizontal: parseInt(this.pHorizontal),
-            pVertical: parseInt(this.pVertical)
+            w: parseInt(this.width),
+            h: parseInt(this.height),
+            ph: parseInt(this.pHorizontal),
+            pv: parseInt(this.pVertical)
         };
     }
 
