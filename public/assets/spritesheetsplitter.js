@@ -411,6 +411,7 @@ class SpritesheetSlicer extends HTMLElement {
         }
 
         this.blob = new Blob([files[0]], { type: files[0].type });
+        this.#outputFrames = []; // Reset output frames
 
         console.log(this.$.spriteSheetImage)
         this.$.retroImageLoad(URL.createObjectURL(this.blob))
