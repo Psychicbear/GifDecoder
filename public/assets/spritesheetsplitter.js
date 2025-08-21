@@ -4,23 +4,58 @@ document.body.appendChild(canvas)
 
 const style = document.createElement('style');
 style.textContent = `
-  .convert {
-    flex-direction: row;
-    width: 100%;  
-  }
+    .convert {
+        flex-direction: column-reverse;
+        width: 100%;
+        height: 100%  
+    }
 
-  #convertForm {
-    flex: 1 1;
-  }
+    .param-input {
+        display: flex;
+        flex-direction: row;
+    }
+        
+    #spritesheetForm fieldset {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    
+    #convertForm {
+        flex: 1 1;
+    }
 
-  #myCanvas {
-    flex: 3 0;
-  }
+    .canvas-container {
+        flex: 3 0;
+    }
 
-  .param-input {
-    display: flex;
-    flex-direction: column;
-  }
+    @media (min-width: 768px) {
+        .convert {
+            display: flex;
+            flex-direction: row;
+            width: 100%;  
+            height: 100%;
+        }
+
+        .param-input {
+            display: flex;
+            flex-direction: column;
+        }
+
+        #convertForm {
+            flex: 1 0;
+        }
+
+        .canvas-container {
+            flex: 2 1;
+        }
+    }
+
+
+    #myCanvas {
+        width: 100%;
+        height: 100%;
+    }
 `;
 document.head.appendChild(style);
 
@@ -233,6 +268,8 @@ class SpritesheetSlicer extends HTMLElement {
                 <button id="start">Start Conversion</button>
                 <button class="newconvert">Choose different sheet</button>
             </div>
+            <div class="canvas-container">
+            </div>
         </div>
         <div class="progress" style="display: none;">
             <span id="loading" aria-busy="true"></span>
@@ -246,7 +283,7 @@ class SpritesheetSlicer extends HTMLElement {
         </div>
         `;
 
-        this.querySelector(".convert").appendChild(canvas)
+        this.querySelector(".canvas-container").appendChild(canvas)
         // this.$.debug = true
     }
 
@@ -269,7 +306,7 @@ class SpritesheetSlicer extends HTMLElement {
                 </label>
                 <label class="param-input" for="height">Height:
                     <input type="number" name="h" value="100" min="0" max="100">
-                    <input type="range" name="h-slider" value="0" min="0" max="100" step="4">
+                    <input type="range" name="h-slider" value="100" min="0" max="100" step="4">
                 </label>
             </fieldset>
             <fieldset class="grid">
@@ -367,10 +404,23 @@ class SpritesheetSlicer extends HTMLElement {
             })
         })
 
-        window.addEventListener('resize', () => {
+        
+        // New resize handler to handle canvas resizing and scaling
+        const resizeObserver = new ResizeObserver((e) => {
+            let width = e[0].contentRect.width;
+            let height = e[0].contentRect.height;
+            this.$.w = width;
+            this.$.h = height;
             this.$.calculateScale();
             this.$.rescaleImage(this.$.cScale);
-        });
+        })
+
+        resizeObserver.observe(document.querySelector('#myCanvas'));
+
+        // window.addEventListener('resize', () => {
+        //     this.$.calculateScale();
+        //     this.$.rescaleImage(this.$.cScale);
+        // });
     }
 
     setInputRange = (e) => {
