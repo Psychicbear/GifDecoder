@@ -7,7 +7,8 @@ style.textContent = `
     .convert {
         flex-direction: column-reverse;
         width: 100%;
-        height: 100%  
+        height: 100%;
+        justify-content: space-between;  
     }
 
     .param-input {
@@ -25,8 +26,24 @@ style.textContent = `
         flex: 1 1;
     }
 
+    .convert-buttons {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    #start {
+        flex: 2 0;
+        margin-right: 1rem;
+    }
+
+    .convert-buttons .newconvert {
+        flex: 1 0;
+    }
+
     .canvas-container {
-        flex: 3 0;
+        flex: 1 1;
+        margin: 1rem;
     }
 
     @media (min-width: 768px) {
@@ -49,6 +66,7 @@ style.textContent = `
         .canvas-container {
             flex: 2 1;
         }
+
     }
 
 
@@ -254,33 +272,38 @@ class SpritesheetSlicer extends HTMLElement {
     render() {
         let canvas = document.querySelector('#myCanvas')
         this.innerHTML = `
-        <h1>Spritesheet Slicer</h1>
-        <span id="error"></span>
-        <div class="file-input">
-            <input type="file" id="fileInput" accept="image/png" />
-            <pre id="output">Waiting for file...</pre>
-            ${this.#fireErrorDialog}
-            ${this.#largeFileDialog}
-        </div>
-        <div class="convert" style="display: none;">
-            <div id="convertForm"">
-                ${this.#form}
-                <button id="start">Start Conversion</button>
-                <button class="newconvert">Choose different sheet</button>
+        <div class="container">
+            <h1>Spritesheet Slicer</h1>
+            <span id="error"></span>
+            <div class="file-input">
+                <input type="file" id="fileInput" accept="image/png" />
+                <pre id="output">Waiting for file...</pre>
+                ${this.#fireErrorDialog}
+                ${this.#largeFileDialog}
             </div>
-            <div class="canvas-container">
+            <div class="convert" style="display: none;">
+                <div id="convertForm"">
+                    ${this.#form}
+                    <div class="convert-buttons">
+                        <button id="start">Start Conversion</button>
+                        <button class="newconvert secondary">New Sheet</button>
+                    </div>
+                </div>
+                <div class="canvas-container">
+                </div>
+            </div>
+            <div class="progress" style="display: none;">
+                <span id="loading" aria-busy="true"></span>
+                <progress id="progress" value="0" max="100"></progress>
+            </div>
+            <div class="output-frames" style="display: none;">
+                <p id="framecount"></p>
+                <button id="download">Download zip</button>
+                <button class="newconvert">Convert Again</button>
+                <div class="out-image"></div>
             </div>
         </div>
-        <div class="progress" style="display: none;">
-            <span id="loading" aria-busy="true"></span>
-            <progress id="progress" value="0" max="100"></progress>
-        </div>
-        <div class="output-frames" style="display: none;">
-            <p id="framecount"></p>
-            <button id="download">Download zip</button>
-            <button class="newconvert">Convert Again</button>
-            <div class="out-image"></div>
-        </div>
+        
         `;
 
         this.querySelector(".canvas-container").appendChild(canvas)
