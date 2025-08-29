@@ -1,254 +1,21 @@
-let canvas = document.createElement("canvas");
-canvas.id = "myCanvas";
-document.body.appendChild(canvas)
 
-const style = document.createElement('style');
-style.textContent = `
-    .convert {
-        flex-direction: column-reverse;
-        width: 100%;
-        height: 100%;
-        justify-content: space-between;  
-    }
+import { slicerTemplate, errorDialog, largeFileDialog, formTemplate } from './templates.js';
+import { setupTad } from './setupTad.js';
 
-    .param-input {
-        display: flex;
-        flex-direction: row;
-    }
-        
-    #spritesheetForm fieldset {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 1rem;
-    }
-    
-    #convertForm {
-        flex: 1 1;
-    }
-
-    .convert-buttons {
-        display: flex;
-        flex-direction: row;
-        justify-content: space-between;
-    }
-
-    #start {
-        flex: 2 0;
-        margin-right: 1rem;
-    }
-
-    .convert-buttons .newconvert {
-        flex: 1 0;
-    }
-
-    .canvas-container {
-        flex: 1 1;
-        margin: 1rem;
-    }
-
-    @media (min-width: 768px) {
-        .convert {
-            display: flex;
-            flex-direction: row;
-            width: 100%;  
-            height: 100%;
-        }
-
-        .param-input {
-            display: flex;
-            flex-direction: column;
-        }
-
-        #convertForm {
-            flex: 1 0;
-        }
-
-        .canvas-container {
-            flex: 2 1;
-        }
-
-    }
-
-
-    #myCanvas {
-        width: 100%;
-        height: 100%;
-    }
-`;
+const style = document.createElement('link');
+style.rel = 'stylesheet';
+style.href = '/assets/spritesheet.css';
+style.type = 'text/css';
+style.media = 'all';
 document.head.appendChild(style);
 
-import { $ } from "./lib/TeachAndDraw.js";
-import { AssetJob } from './lib/AssetManager.js';
-import { Img, Stamp } from './lib/Img.js';
-
-
-
-/**
- * @typedef {import("./lib/TeachAndDraw.js).Tad} Tad
- * @typedef {import("./lib/AssetManager.js).AssetJob} AssetJob
- * @typedef {import("./lib/Img.js).Img} Img
- * @typedef {import("./lib/Img.js).Stamp} Stamp
- * @typedef {import("./lib/Group.js).Group} Group
-*/
-
-
-class RetroImg extends Image {
-    /**
-     * Creates an instance of RetroImg.
-     * @param {string} filepath
-     * @param {AssetJob} job
-     */
-    constructor(filepath) {
-        super();
-        this.src = filepath;
-        /**
-         * @type {Stamp[]}
-         */
-        this.wrapper = [];
-        //wrapper currently assigned in tad.loadImage will fix later
-
-        this.onload = () => {
-            for (let i = 0; i < this.wrapper.length; i++) {
-                this.w = this.naturalWidth;
-                this.h = this.naturalHeight;
-                this.wrapper[i].w = this.naturalWidth;
-                this.wrapper[i].h = this.naturalHeight;
-            }
-        };
-
-        this.onerror = () => {
-            const errorMessage = ErrorMsgManager.loadFileFailed(
-                filepath,
-                "img"
-            );
-            const error = new Error("Loading Image:" + errorMessage);
-            job.error = error;
-            console.error(error);
-        };
-
-        this.setScale = function (scale) {
-            this.w = this.naturalWidth * scale;
-            this.h = this.naturalHeight * scale;
-            for (let i = 0; i < this.wrapper.length; i++) {
-                this.wrapper[i].w = this.w;
-                this.wrapper[i].h = this.h;
-            }
-        }
-    }
-}
-
-/** @type {Tad} */
-$.use(update, document.querySelector('#myCanvas'))
-/** @type {Stamp | null} */
-$.spriteSheetImage = null
-$.spriteSheetSquares = $.make.group()
-$.sParams = {
-    x: 0, y: 0, w: 0, h: 0, ph: 0, pv: 0
-}
-$.updateScaled = true
-
-$.setup = false
-$.cScale = 1
-$.setImageScale = false
-$.retroImageLoad = function (blobUrl, onload = null){
-    console.log('Creating new image in tad: ', blobUrl)
-    const img = new RetroImg(blobUrl);
-    const nuStamp = new Stamp(this, 0, 0, img);
-    img.wrapper.push(nuStamp);
-    // @ts-ignore
-    // job.asset = img;
-    console.log({w: img.width, h: img.h})
-    this.spriteSheetImage = nuStamp
-
-    img.addEventListener('load', (e) => {
-        console.log('Image loaded in tad: ', img)
-        this.calculateScale()
-        this.rescaleImage(this.cScale)
-        console.log({w: this.spriteSheetImage.w, h: this.spriteSheetImage.h})
-        if(onload){
-            onload(e)
-        }
-    })
-}
-
-$.calculateScale = function (){
-    if(!this.spriteSheetImage){
-        return
-    }
-    let canvas = document.querySelector("#myCanvas")
-
-    this.w = canvas.clientWidth
-    this.h = canvas.clientHeight
-    // this.cScale = scaleToFit(this.spriteSheetImage.raw.naturalWidth, this.spriteSheetImage.raw.naturalHeight, $.w, $.h) * 100
-    this.cScale = scaleToFit(this.spriteSheetImage.raw.naturalWidth, this.spriteSheetImage.raw.naturalHeight, $.w, $.h)
-    console.log(`Calculated scale: ${this.cScale} for image size: ${this.spriteSheetImage.raw.naturalWidth}x${this.spriteSheetImage.raw.naturalHeight} and canvas size: ${this.w}x${this.h}`)
-}
-
-$.rescaleImage = function (scale){
-    if(!this.spriteSheetImage){
-        return
-    }
-    this.spriteSheetImage.raw.setScale(scale)
-    this.spriteSheetImage.x = this.w/2
-    this.spriteSheetImage.y = $.h/2
-    console.log({w: this.spriteSheetImage.w, h: this.spriteSheetImage.h})
-}
-
-function highlightSprites(img, sX, sY, sW, sH, sPadLeft, sPadTop){
-    if(sW <= 0 || sH <= 0){
-        return
-    }
-    //console.log({w: img.w, h: img.h})
-    let sheet = img
-    let sheetLeft = sheet.x - sheet.w/2
-    let sheetTop = sheet.y - sheet.h/2
-    let sheetRight = sheetLeft + sheet.w
-    let sheetBottom = sheetTop + sheet.h
-
-    let startX = sheetLeft + sX
-    let startY = sheetTop + sY
-
-    $.shape.colour = 'transparent'
-    $.shape.border = 'yellow'
-    for(let yy = startY;yy + sH<= sheetBottom; yy += (sH + sPadTop)){
-        for(let xx = startX;xx + sW <= sheetRight; xx += (sW + sPadLeft)){
-            let centerX = xx + sW/2
-            let centerY = yy + sH/2
-            $.shape.rectangle(centerX, centerY, sW, sH)
-        }
-    }
-}
-
-function scaleToFit(imgW, imgH, canvasW, canvasH){
-    const scaleX = canvasW / imgW
-    const scaleY = canvasH / imgH
-    return Math.min(scaleX, scaleY)
-}
-
-function update(){
-    let stamp = $.spriteSheetImage
-    if($.spriteSheetImage){
-        stamp.draw()
-        stamp.x = $.w/2
-        stamp.y = $.h/2
-        console.log(stamp.raw.complete)
-        if(stamp.raw.complete){
-            $.shape.colour = 'transparent'
-            $.shape.border = 'red'
-            $.shape.rectangle(stamp.x, stamp.y, stamp.w,stamp.h)
-            let scaled = {x: 0, y: 0, w: 0, h: 0, ph: 0, pv: 0}
-            Object.keys($.sParams).forEach((key) => {
-                scaled[key] = Math.floor($.sParams[key] * $.cScale)
-            })
-            highlightSprites(stamp, scaled.x, scaled.y, scaled.w, scaled.h, scaled.ph, scaled.pv)
-        }
-    }
-
-}
-
-
+setupTad();
 const worker = new Worker('/assets/sprite-worker.js');
 
+/**
+ * @class SpritesheetSlicer
+ * @extends {HTMLElement}
+ */
 class SpritesheetSlicer extends HTMLElement {
     #outputFrames = [];
     constructor() {
@@ -261,123 +28,23 @@ class SpritesheetSlicer extends HTMLElement {
         this.render()
         this.#addEvents();
 
-        console.log(this.$.spriteSheetImage)
-        this.$.retroImageLoad('/assets/guy.png', this.setInputRange)
-        this.$.sParams = {
-            x: 0, y: 0, w: 100, h: 100, ph: 0, pv: 0
-        }
+        /**
+            // Load a default image for demonstration purposes
+            this.$.retroImageLoad('/assets/guy.png', this.setInputRange)
+            this.$.sParams = {
+                x: 0, y: 0, w: 100, h: 100, ph: 0, pv: 0
+            }
+        */
+
+
         this.showScene('.convert')
     }
 
     render() {
         let canvas = document.querySelector('#myCanvas')
-        this.innerHTML = `
-        <div class="container">
-            <h1>Spritesheet Slicer</h1>
-            <span id="error"></span>
-            <div class="file-input">
-                <input type="file" id="fileInput" accept="image/png" />
-                <pre id="output">Waiting for file...</pre>
-                ${this.#fireErrorDialog}
-                ${this.#largeFileDialog}
-            </div>
-            <div class="convert" style="display: none;">
-                <div id="convertForm"">
-                    ${this.#form}
-                    <div class="convert-buttons">
-                        <button id="start">Start Conversion</button>
-                        <button class="newconvert secondary">New Sheet</button>
-                    </div>
-                </div>
-                <div class="canvas-container">
-                </div>
-            </div>
-            <div class="progress" style="display: none;">
-                <span id="loading" aria-busy="true"></span>
-                <progress id="progress" value="0" max="100"></progress>
-            </div>
-            <div class="output-frames" style="display: none;">
-                <p id="framecount"></p>
-                <button id="download">Download zip</button>
-                <button class="newconvert">Convert Again</button>
-                <div class="out-image"></div>
-            </div>
-        </div>
-        
-        `;
-
+        this.innerHTML = slicerTemplate(errorDialog, largeFileDialog, formTemplate)
         this.querySelector(".canvas-container").appendChild(canvas)
-        // this.$.debug = true
     }
-
-    #form = `
-        <form id="spritesheetForm">
-            <fieldset class="grid">
-                <label class="param-input" for="x">X:
-                    <input type="number" name="x" value="0" min="0" max="100">
-                    <input type="range" name="x-slider" value="0" min="0" max="100" step="4">
-                </label>
-                <label class="param-input" for="y">Y:
-                    <input type="number" name="y" value="0" min="0" max="100">
-                    <input type="range" name="y-slider" value="0" min="0" max="100" step="4">
-                </label>
-            </fieldset>
-            <fieldset class="grid">
-                <label class="param-input" for="width">Width:
-                    <input type="number" name="w" value="100" min="0" max="100">
-                    <input type="range" name="w-slider" value="100" min="0" max="100" step="4">
-                </label>
-                <label class="param-input" for="height">Height:
-                    <input type="number" name="h" value="100" min="0" max="100">
-                    <input type="range" name="h-slider" value="100" min="0" max="100" step="4">
-                </label>
-            </fieldset>
-            <fieldset class="grid">
-                <label class="param-input" for="pHorizontal">Horizontal:
-                    <input type="number" name="ph" value="0" min="0" max="100">
-                    <input type="range" name="ph-slider" value="0" min="0" max="100" step="4">
-                </label>
-                <label class="param-input" for="pVertical">Vertical:
-                    <input type="number" name="pv" value="0" min="0" max="100">
-                    <input type="range" name="pv-slider" value="0" min="0" max="100" step="4">
-                </label>
-            </fieldset>
-        </form>
-    `
-
-    #fireErrorDialog = `
-            <dialog id="fileErrorDialog">
-                <article>
-                    <h2>Incorrect File Type</h2>
-                    <p>
-                        The file you selected is not a PNG. Please upload a valid PNG file.
-                    </p>
-                    <footer id="dialog-footer">
-                        <button class="close-dialog">Ok</button>
-                    </footer>
-                </article>
-            </dialog>
-    `
-
-    #largeFileDialog = `
-        <dialog id="largeFileDialog">
-            <article>
-                <h2>Large File Upload</h2>
-                <p>
-                    You are about to upload a large file. This may take a while to process.
-                    Please do not close the browser if the page freezes, as the processing is still ongoing.
-                </p>
-                <footer id="dialog-footer">
-                <button class="secondary close-dialog">
-                    Cancel
-                </button>
-                <button id="confirm">Confirm</button>
-                </footer>
-            </article>
-        </dialog>
-    `
-
-
 
     /**
      * Adds event listeners to the elements in the component.
@@ -400,66 +67,67 @@ class SpritesheetSlicer extends HTMLElement {
 
         this.fileInput.addEventListener('change', this.fileUpload);
         this.querySelector('#start').addEventListener('click', this.startConversion);
-
+        this.querySelectorAll('.newconvert').forEach(this.resetToFileUpload);
+        this.querySelectorAll('.param-row').forEach(this.bindInputs)
         
-        this.querySelectorAll('.newconvert').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelector('#fileInput').value = ''; // Reset file input
-                document.querySelector('.out-image').innerHTML = '';//Clears previous images output
-                this.showScene('.file-input');
-            });
-        });
-
-        this.querySelectorAll('.param-input').forEach(inp => {
-            let inputs = inp.querySelectorAll('input');
-            let baseKey = inputs[0].name;
-            console.log(inp)
-            inputs[0].addEventListener('input', e => {
-                console.log({target: e.target.name, value: e.target.value })
-                this.$.sParams[baseKey] = parseInt(e.target.value)
-                inputs[1].value = e.target.value
-            })
-
-            inputs[1].addEventListener('input', e => {
-                console.log({target: e.target.name, value: e.target.value })
-                this.$.sParams[baseKey] = parseInt(e.target.value)
-                inputs[0].value = e.target.value
-            })
-        })
-
-        
-        // New resize handler to handle canvas resizing and scaling
-        const resizeObserver = new ResizeObserver((e) => {
-            let width = e[0].contentRect.width;
-            let height = e[0].contentRect.height;
-            this.$.w = width;
-            this.$.h = height;
+        window.addEventListener('resize', () => {
             this.$.calculateScale();
             this.$.rescaleImage(this.$.cScale);
-        })
+        });
 
-        resizeObserver.observe(document.querySelector('#myCanvas'));
-
-        // window.addEventListener('resize', () => {
-        //     this.$.calculateScale();
-        //     this.$.rescaleImage(this.$.cScale);
-        // });
     }
 
+    /** 
+     * Binds the range and number inputs together so that they update each other.
+     * @param {HTMLElement} inp - The container element that holds the input pair.
+    */
+    bindInputs = (inp) => {
+        let inputs = inp.querySelectorAll('input');
+        let baseKey = inputs[1].name;
+        inputs[0].addEventListener('input', e => {
+            console.log({target: e.target.name, value: e.target.value })
+            this.$.sParams[baseKey] = parseInt(e.target.value)
+            inputs[1].value = e.target.value
+        })
+
+        inputs[1].addEventListener('input', e => {
+            console.log({target: e.target.name, value: e.target.value })
+            this.$.sParams[baseKey] = parseInt(e.target.value)
+            inputs[0].value = e.target.value
+        })
+    }
+    
+    /**
+     * Sets the max value for the input sliders based on the natural 
+     * width and height of the loaded image.
+     * @param {Event} e 
+     */
     setInputRange = (e) => {
         let width = e.target.naturalWidth;
         let height = e.target.naturalHeight;
         [this.x, this.y, this.width, this.height, this.pHorizontal, this.pVertical].forEach((el, i) => {
             if(i%2 === 0) {
                 el.max = width;
-                el.nextElementSibling.max = width;
+                el.previousElementSibling.max = width;
             } else {
                 el.max = height;
-                el.nextElementSibling.max = height;
+                el.previousElementSibling.max = height;
             }
         })
         this.width.value = width/4;
         this.height.value = height/4;
+    }
+
+    /** Applies an onClick event to the button to reset the file input and clear previous outputs.
+     * This event also takes the user back to the file input scene.
+     * @param {HTMLElement} btn - The button element to attach the event listener to.
+    */
+    resetToFileUpload = (btn) => {
+        btn.addEventListener('click', () => {
+            document.querySelector('#fileInput').value = ''; // Reset file input
+            document.querySelector('.out-image').innerHTML = '';//Clears previous images output
+            this.showScene('.file-input');
+        });
     }
 
     /**
@@ -513,7 +181,7 @@ class SpritesheetSlicer extends HTMLElement {
     }
 
     /**
-     * 
+     * Collects frames from Go WASM worker and prepares them for display and download.
      * @param {Uint16Array[]} frames 
      */
     processResult(frames) {
@@ -568,6 +236,12 @@ class SpritesheetSlicer extends HTMLElement {
 
     }
 
+    /** 
+     * Updates the progress bar and loading text based on the current and maximum values.
+     * Value returns from the Go WASM worker.
+     * @param {number} cur - Current progress value.
+     * @param {number} max - Maximum progress value.
+    */
     setProgress(cur, max) {
         const progressBar = document.querySelector('#progress');
         progressBar.value = cur;
@@ -649,25 +323,40 @@ class SpritesheetSlicer extends HTMLElement {
     get spriteForm() {
         return this.querySelector('#spritesheetForm');
     }
+
+    /** 
+     * Getters for each input field in the form
+     */
+
+    /** @returns {HTMLInputElement} - The forms X value */
     get x() {
         return document.querySelector('#spritesheetForm input[name="x"]');
     }
+    /** @returns {HTMLInputElement} - The forms Y value */
     get y() {
         return document.querySelector('#spritesheetForm input[name="y"]');
     }
+    /** @returns {HTMLInputElement} - The forms W value */
     get width() {
         return document.querySelector('#spritesheetForm input[name="w"]');
     }
+    /** @returns {HTMLInputElement} - The forms H value */
     get height() {
         return document.querySelector('#spritesheetForm input[name="h"]');
     }
+    /** @returns {HTMLInputElement} - The forms pH value */
     get pHorizontal() {
         return document.querySelector('#spritesheetForm input[name="ph"]');
     }
+    /** @returns {HTMLInputElement} - The forms Pv value */
     get pVertical() {
         return document.querySelector('#spritesheetForm input[name="pv"]');
     }
 
+    /**
+     * Gathers all slicing parameters from the form inputs.
+     * @returns {Object} - An object containing all slicing parameters.
+     */
     get splitParams() {
         return {
             x: parseInt(this.x.value),

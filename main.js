@@ -3,6 +3,7 @@ const app = express();
 const port = 3000; 
 const path = require('path');
 const ROOT = path.join(__dirname, "public");
+const ASSETS = path.join(__dirname, "assets");
 
 app.use((_, res, next) => {
     res.set({
