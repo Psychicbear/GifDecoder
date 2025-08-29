@@ -28,16 +28,15 @@ class SpritesheetSlicer extends HTMLElement {
         this.render()
         this.#addEvents();
 
-        /**
-            // Load a default image for demonstration purposes
-            this.$.retroImageLoad('/assets/guy.png', this.setInputRange)
-            this.$.sParams = {
-                x: 0, y: 0, w: 100, h: 100, ph: 0, pv: 0
-            }
-        */
+        // /**
+        //     // Load a default image for demonstration purposes
+        //     this.$.retroImageLoad('/assets/guy.png', this.setInputRange)
+        //     this.$.sParams = {
+        //         x: 0, y: 0, w: 100, h: 100, ph: 0, pv: 0
+        //     }
+        //     this.showScene('.convert')
+        // */
 
-
-        this.showScene('.convert')
     }
 
     render() {
