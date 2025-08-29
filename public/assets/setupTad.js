@@ -64,6 +64,26 @@ class RetroImg extends Image {
     }
 }
 
+function update(){
+    let stamp = $.spriteSheetImage
+    if($.spriteSheetImage){
+        stamp.draw()
+        stamp.x = $.w/2
+        stamp.y = $.h/2
+        if(stamp.raw.complete){
+            $.shape.colour = 'transparent'
+            $.shape.border = 'red'
+            $.shape.rectangle(stamp.x, stamp.y, stamp.w,stamp.h)
+            let scaled = {x: 0, y: 0, w: 0, h: 0, ph: 0, pv: 0}
+            Object.keys($.sParams).forEach((key) => {
+                scaled[key] = Math.floor($.sParams[key] * $.cScale)
+            })
+            console.log({stamp: stamp, scaled: scaled, sParams: $.sParams})
+            $.highlightSprites(stamp, scaled.x, scaled.y, scaled.w, scaled.h, scaled.ph, scaled.pv)
+        }
+    }
+}
+
 /**
  * Sets up the Tad environment for sprite sheet manipulation.
  */
@@ -108,7 +128,7 @@ export function setupTad(){
         let canvas = document.querySelector("#myCanvas")
 
         this.w = canvas.clientWidth
-        this.h = canvas.clientHeight
+        this.h = window.innerHeight * 0.5
         // this.cScale = scaleToFit(this.spriteSheetImage.raw.naturalWidth, this.spriteSheetImage.raw.naturalHeight, $.w, $.h) * 100
         this.cScale = $.scaleToFit(this.spriteSheetImage.raw.naturalWidth, this.spriteSheetImage.raw.naturalHeight, $.w, $.h)
     }
@@ -123,7 +143,9 @@ export function setupTad(){
     }
 
     $.highlightSprites = function (img, sX, sY, sW, sH, sPadLeft, sPadTop){
+        // console.log("Highlight sprites begins")
         if(sW <= 0 || sH <= 0){
+            // console.log("Highlight sprites ends early ")
             return
         }
         let sheet = img
@@ -144,6 +166,7 @@ export function setupTad(){
                 $.shape.rectangle(centerX, centerY, sW, sH)
             }
         }
+        // console.log("Highlight sprites ends")
     }
 
     $.scaleToFit = function(srcWidth, srcHeight, maxWidth, maxHeight) {
@@ -152,22 +175,5 @@ export function setupTad(){
     }
 
 
-    function update(){
-        let stamp = $.spriteSheetImage
-        if($.spriteSheetImage){
-            stamp.draw()
-            stamp.x = $.w/2
-            stamp.y = $.h/2
-            if(stamp.raw.complete){
-                $.shape.colour = 'transparent'
-                $.shape.border = 'red'
-                $.shape.rectangle(stamp.x, stamp.y, stamp.w,stamp.h)
-                let scaled = {x: 0, y: 0, w: 0, h: 0, ph: 0, pv: 0}
-                Object.keys($.sParams).forEach((key) => {
-                    scaled[key] = Math.floor($.sParams[key] * $.cScale)
-                })
-                $.highlightSprites(stamp, scaled.x, scaled.y, scaled.w, scaled.h, scaled.ph, scaled.pv)
-            }
-        }
-    }
+
 }

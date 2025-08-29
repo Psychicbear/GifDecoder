@@ -1,6 +1,6 @@
 export function slicerTemplate(errorDialog = '', largeFileDialog = '', form = '') {
     const innerHTML = `
-        <div class="container">
+        <div class="container component-container">
             <h1>Spritesheet Slicer</h1>
             <span id="error"></span>
             <div class="file-input">

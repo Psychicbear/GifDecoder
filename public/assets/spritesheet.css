@@ -8,11 +8,16 @@
         -moz-appearance: textfield; /* For Firefox */
     }
 
+    .component-container {
+        height: 100%
+    }
+
     .convert {
         flex-direction: column-reverse;
         width: 100%;
         height: 100%;
         justify-content: space-between;  
+        gap: 0;
     }
 
     .param-input {
@@ -23,10 +28,12 @@
     #spritesheetForm fieldset {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 1rem;
+        gap: 0.5rem;
     }
     
     #convertForm {
+        width: 100%;
+        height: 100%;
         flex: 1 2 30%;
     }
 
@@ -48,8 +55,8 @@
     .canvas-container {
         width: 100%;
         height: 100%;
-        flex: 2 1 60%;
-        margin: 1rem;
+        flex: 2 0 60%;
+        margin: 0.5rem;
     }
 
     .param-row {

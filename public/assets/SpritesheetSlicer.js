@@ -1,24 +1,6 @@
-
-
-import { setupTad } from './setupTad.js';
-import { slicerTemplate, errorDialog, largeFileDialog, formTemplate} from "./templates.js"
-const worker = new Worker('/assets/sprite-worker.js');
-
-const style = document.createElement('link');
-style.rel = 'stylesheet';
-style.href = '/assets/spritesheet.css';
-style.type = 'text/css';
-style.media = 'all';
-document.head.appendChild(style);
-
-setupTad();
-
 /**
  * @class SpritesheetSlicer
  * @extends {HTMLElement}
- * @classdesc JS Component which manages and renders the front end for a spritesheet slicing webapp
- * This frontend prompts the user for sprite dimensions after they upload a spritesheet file
- * It then sends the parameters to a Go WASM backend which 
  */
 class SpritesheetSlicer extends HTMLElement {
     #outputFrames = [];
@@ -31,6 +13,16 @@ class SpritesheetSlicer extends HTMLElement {
     connectedCallback() {
         this.render()
         this.#addEvents();
+
+        // /**
+        //     // Load a default image for demonstration purposes
+        //     this.$.retroImageLoad('/assets/guy.png', this.setInputRange)
+        //     this.$.sParams = {
+        //         x: 0, y: 0, w: 100, h: 100, ph: 0, pv: 0
+        //     }
+        //     this.showScene('.convert')
+        // */
+
     }
 
     render() {
@@ -41,6 +33,11 @@ class SpritesheetSlicer extends HTMLElement {
 
     /**
      * Adds event listeners to the elements in the component.
+     * This includes:
+     * - Handling file input changes to upload the spritesheet.
+     * - Handling the start conversion button to initiate the spritesheet splitting process.
+     * - Handling the new conversion button to reset the file input and clear previous outputs.
+     * * It also manages dialog interactions for large file uploads and incorrect file types.
      */
     #addEvents() {
         this.worker.onmessage = (e) => {
@@ -102,10 +99,8 @@ class SpritesheetSlicer extends HTMLElement {
                 el.previousElementSibling.max = height;
             }
         })
-        this.width.value = 32;
-        this.height.value = 32;
-        this.width.dispatchEvent(new Event('input', { bubbles: true }));
-        this.height.dispatchEvent(new Event('input', { bubbles: true }));
+        this.width.value = width/4;
+        this.height.value = height/4;
     }
 
     /** Applies an onClick event to the button to reset the file input and clear previous outputs.
@@ -145,7 +140,7 @@ class SpritesheetSlicer extends HTMLElement {
         this.#outputFrames = []; // Reset output frames
 
         console.log(this.$.spriteSheetImage)
-        this.$.retroImageLoad(URL.createObjectURL(this.blob), this.setInputRange)
+        this.$.retroImageLoad(URL.createObjectURL(this.blob))
         console.log(this.$.spriteSheetImage)
 
         if (!this.fileErrorDialog.open && !this.largeFileDialog.open) {
@@ -359,7 +354,3 @@ class SpritesheetSlicer extends HTMLElement {
     }
 
 }
-
-
-
-customElements.define('spritesheet-slicer', SpritesheetSlicer);
