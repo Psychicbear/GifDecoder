@@ -1,5 +1,12 @@
 
 
+/**
+ * Spritesheet Slicer Web Component
+ * Author: Riley Schofield
+ * Initial setup here loads the customised TAD library and the web worker
+ * It then loads the CSS for the component and defines the web component class
+ * Finally it registers the web component with the browser
+ */
 import { setupTad } from './setupTad.js';
 import { slicerTemplate, errorDialog, largeFileDialog, formTemplate} from "./templates.js"
 const worker = new Worker('/assets/sprite-worker.js');

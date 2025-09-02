@@ -1,3 +1,15 @@
+/**
+ * This file contains the HTML templates for the spritesheet slicer component
+ * All templates are to be imported unless you want to customise them
+*/
+
+/** 
+ * @function slicerTemplate
+ * @param {string} errorDialog Inner HTML for error dialog
+ * @param {string} largeFileDialog Inner HTML for large file dialog
+ * @param {string} form Inner HTML for form
+ * @returns {string} Inner HTML for the spritesheet slicer component
+ */
 export function slicerTemplate(errorDialog = '', largeFileDialog = '', form = '') {
     const innerHTML = `
         <div class="container component-container">
